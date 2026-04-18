@@ -965,15 +965,19 @@ class LimaLightsCard extends HTMLElement {
       effectRowValueEl = document.createElement('span');
       effectRowValueEl.className = 'lima-info-value';
       effectRowValueEl.style.color = accent;
-      effectRowValueEl.textContent = getEffect() ?? 'None ›';
+      effectRowValueEl.textContent = getEffect() ? `${getEffect()} ›` : 'None ›';
 
       effectRow.appendChild(effectLabelEl);
       effectRow.appendChild(effectRowValueEl);
 
-      // Open effect picker sheet
+      // Open effect picker sheet — pass onSelect for immediate optimistic update
       effectRow.addEventListener('click', ev => {
         ev.stopPropagation();
-        this._openEffectPicker(entityId, effectList, getEffect(), accent, popupBg, textCol);
+        this._openEffectPicker(entityId, effectList, getEffect(), accent, popupBg, textCol, (selected) => {
+          if (effectRowValueEl) {
+            effectRowValueEl.textContent = (selected && selected !== 'none') ? `${selected} ›` : 'None ›';
+          }
+        });
       });
 
       infoWrap.appendChild(effectRow);
@@ -1012,7 +1016,8 @@ class LimaLightsCard extends HTMLElement {
         ctValueEl.textContent = (getCT() < 3000 ? `${getCT()}K · Warm` : getCT() > 5000 ? `${getCT()}K · Cool` : `${getCT()}K`);
       }
       if (effectRowValueEl) {
-        effectRowValueEl.textContent = getEffect() ?? 'None ›';
+        const e = getEffect();
+        effectRowValueEl.textContent = e ? `${e} ›` : 'None ›';
       }
     };
 
@@ -1237,7 +1242,7 @@ class LimaLightsCard extends HTMLElement {
 
   // ── Effect Picker Sheet ───────────────────────────────────────────────────
 
-  _openEffectPicker(entityId, effectList, currentEffect, accent, popupBg, textCol) {
+  _openEffectPicker(entityId, effectList, currentEffect, accent, popupBg, textCol, onSelect) {
     const existing = document.getElementById('lima-effect-sheet');
     if (existing) existing.remove();
 
@@ -1260,6 +1265,7 @@ class LimaLightsCard extends HTMLElement {
     noneBtn.addEventListener('click', ev => {
       ev.stopPropagation();
       this._callService('light', 'turn_on', { entity_id: entityId, effect: 'none' });
+      if (onSelect) onSelect(null);
       sheet.remove();
     });
     inner.appendChild(noneBtn);
@@ -1271,6 +1277,7 @@ class LimaLightsCard extends HTMLElement {
       btn.addEventListener('click', ev => {
         ev.stopPropagation();
         this._callService('light', 'turn_on', { entity_id: entityId, effect });
+        if (onSelect) onSelect(effect);
         sheet.remove();
       });
       inner.appendChild(btn);
