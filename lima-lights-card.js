@@ -1,5 +1,5 @@
 /**
- * 🦙 Lima Lights Card
+ * Lima Lights Card
  * Compact pill card showing how many lights are on across multiple entities.
  * Click pill → light overview popup with full controls
  * Click light pill → individual light control popup (on/off, brightness, colour temp)
@@ -113,6 +113,15 @@ class LimaLightsCard extends HTMLElement {
     const feats = this._hass?.states[entityId]?.attributes?.supported_color_modes || [];
     const feat  = this._hass?.states[entityId]?.attributes?.supported_features || 0;
     return feats.length > 0 || (feat & 1) !== 0;
+  }
+
+  _supportsRgb(entityId) {
+    const modes = this._hass?.states[entityId]?.attributes?.supported_color_modes || [];
+    return modes.some(m => ['rgb', 'rgbw', 'rgbww', 'hs', 'xy'].includes(m));
+  }
+
+  _getRgbColor(entityId) {
+    return this._hass?.states[entityId]?.attributes?.rgb_color ?? null;
   }
 
   _name(entityId) {
@@ -370,6 +379,15 @@ class LimaLightsCard extends HTMLElement {
         if (didLongPress) return;
         const isNowOn = this._isOn(entityId);
         this._callService('light', isNowOn ? 'turn_off' : 'turn_on', { entity_id: entityId });
+        // Optimistic visual update — reflects change immediately before HA state arrives
+        const willBeOn = !isNowOn;
+        const pillRef = pillMap.get(entityId);
+        if (pillRef) {
+          pillRef.pill.classList.toggle('is-on', willBeOn);
+          pillRef.svg.setAttribute('fill', willBeOn ? onCol : 'rgba(255,255,255,0.2)');
+          pillRef.briEl.style.color = willBeOn ? onCol : 'rgba(255,255,255,0.25)';
+          pillRef.briEl.textContent = willBeOn ? 'On' : 'Off';
+        }
       };
 
       pill.addEventListener('mousedown',  () => startPress());
@@ -567,6 +585,8 @@ class LimaLightsCard extends HTMLElement {
     const getEffects  = () => getState()?.attributes?.effect_list ?? [];
     const supportsBri = this._supportsBrightness(entityId);
     const supportsCT  = this._supportsColorTemp(entityId);
+    const supportsRgb = this._supportsRgb(entityId);
+    const getRgb      = () => this._getRgbColor(entityId);
     const minCT       = this._minColorTemp(entityId);
     const maxCT       = this._maxColorTemp(entityId);
 
@@ -585,20 +605,58 @@ class LimaLightsCard extends HTMLElement {
     const stateLabelEl = document.createElement('div');
     const toggleBtn    = document.createElement('button');
 
+    // Persistent circle — reflects RGB colour, clickable to open colour picker
+    const circleEl   = document.createElement('div');
+    circleEl.style.cssText = 'font-size:38px;font-weight:700;letter-spacing:-1.5px;line-height:1;cursor:pointer;transition:color 0.2s ease;';
+    const stateTextEl = document.createElement('div');
+    stateTextEl.style.cssText = 'font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;';
+    stateLabelEl.appendChild(circleEl);
+    stateLabelEl.appendChild(stateTextEl);
+
+    const getCircleColour = () => {
+      const rgb = getRgb();
+      if (!getIsOn()) return 'rgba(255,255,255,0.2)';
+      return rgb ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : onCol;
+    };
+
     const refreshToggle = () => {
       const isOn = getIsOn();
       const bri  = getBri();
-      stateLabelEl.innerHTML = `
-        <div style="font-size:38px;font-weight:700;letter-spacing:-1.5px;color:${isOn ? onCol : 'rgba(255,255,255,0.2)'};line-height:1;">${isOn ? '●' : '○'}</div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;">${isOn ? (supportsBri ? `${bri}% brightness` : 'On') : 'Off'}</div>`;
+      circleEl.textContent    = isOn ? '●' : '○';
+      circleEl.style.color    = getCircleColour();
+      stateTextEl.textContent = isOn ? (supportsBri ? `${bri}% brightness` : 'On') : 'Off';
       toggleBtn.style.cssText = `background:${isOn ? accent : 'rgba(255,255,255,0.12)'};color:${isOn ? '#000' : 'rgba(255,255,255,0.8)'};border:none;border-radius:14px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;transition:background 0.2s,color 0.2s;font-family:inherit;`;
       toggleBtn.textContent = isOn ? 'Turn Off' : 'Turn On';
     };
     refreshToggle();
 
+    // Clicking the circle opens the colour picker; a proxy forwards background → color
+    // so _openColourPicker's circleEl.style.background call updates our text colour
+    const circleColourProxy = { style: {} };
+    Object.defineProperty(circleColourProxy.style, 'background', {
+      set: val => { circleEl.style.color = val; },
+      get: () => circleEl.style.color,
+    });
+    circleEl.addEventListener('click', ev => {
+      ev.stopPropagation();
+      this._openColourPicker(entityId, accent, popupBg, textCol, circleColourProxy, () => {
+        circleEl.style.color = getCircleColour();
+      });
+    });
+
     toggleBtn.addEventListener('click', ev => {
       ev.stopPropagation();
-      this._callService('light', getIsOn() ? 'turn_off' : 'turn_on', { entity_id: entityId });
+      const wasOn = getIsOn();
+      this._callService('light', wasOn ? 'turn_off' : 'turn_on', { entity_id: entityId });
+      // Optimistic: show anticipated state immediately before HA state arrives
+      const willBeOn = !wasOn;
+      const bri = getBri();
+      const rgb = getRgb();
+      circleEl.textContent    = willBeOn ? '●' : '○';
+      circleEl.style.color    = willBeOn ? (rgb ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : onCol) : 'rgba(255,255,255,0.2)';
+      stateTextEl.textContent = willBeOn ? (supportsBri ? bri + '% brightness' : 'On') : 'Off';
+      toggleBtn.style.cssText = `background:${willBeOn ? accent : 'rgba(255,255,255,0.12)'};color:${willBeOn ? '#000' : 'rgba(255,255,255,0.8)'};border:none;border-radius:14px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;transition:background 0.2s,color 0.2s;font-family:inherit;`;
+      toggleBtn.textContent = willBeOn ? 'Turn Off' : 'Turn On';
     });
 
     toggleWrap.appendChild(stateLabelEl);
@@ -607,6 +665,36 @@ class LimaLightsCard extends HTMLElement {
     // Controls
     const controlsWrap = document.createElement('div');
     controlsWrap.style.cssText = 'display:flex;flex-direction:column;gap:14px;margin-bottom:18px;';
+
+    // ── Colour circle (RGB lights only) ───────────────────────────────────
+    let colourCircleEl = null;
+    const updateColourCircle = () => {
+      if (!colourCircleEl) return;
+      const rgb = getRgb();
+      const isOn = getIsOn();
+      colourCircleEl.style.background = (rgb && isOn)
+        ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`
+        : isOn ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.12)';
+    };
+    if (supportsRgb) {
+      const colourRow = document.createElement('div');
+      colourRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:2px 0;';
+      const colourLabelEl = document.createElement('div');
+      colourLabelEl.style.cssText = 'font-size:12px;font-weight:600;color:rgba(255,255,255,0.5);letter-spacing:0.06em;';
+      colourLabelEl.textContent = 'Colour';
+      colourCircleEl = document.createElement('div');
+      colourCircleEl.style.cssText = 'width:36px;height:36px;border-radius:50%;cursor:pointer;border:2px solid rgba(255,255,255,0.2);transition:transform 0.15s ease,box-shadow 0.15s ease;flex-shrink:0;';
+      updateColourCircle();
+      colourCircleEl.addEventListener('mouseenter', () => { colourCircleEl.style.transform = 'scale(1.08)'; colourCircleEl.style.boxShadow = '0 0 0 3px rgba(255,255,255,0.15)'; });
+      colourCircleEl.addEventListener('mouseleave', () => { colourCircleEl.style.transform = ''; colourCircleEl.style.boxShadow = ''; });
+      colourCircleEl.addEventListener('click', ev => {
+        ev.stopPropagation();
+        this._openColourPicker(entityId, accent, popupBg, textCol, colourCircleEl, updateColourCircle);
+      });
+      colourRow.appendChild(colourLabelEl);
+      colourRow.appendChild(colourCircleEl);
+      controlsWrap.appendChild(colourRow);
+    }
 
     // ── HomeKit brightness slider ─────────────────────────────────────────
     let briValueEl, hkFill;
@@ -634,7 +722,7 @@ class LimaLightsCard extends HTMLElement {
 
       const hkLabelDiv = document.createElement('div');
       hkLabelDiv.className = 'lima-hk-slider-label';
-      hkLabelDiv.innerHTML = `<span class="lima-hk-slider-name">💡 ${name}</span><span class="lima-hk-slider-value">${getBri()}%</span>`;
+      hkLabelDiv.innerHTML = `<span class="lima-hk-slider-name">${name}</span><span class="lima-hk-slider-value">${getBri()}%</span>`;
       const hkValSpan = hkLabelDiv.querySelector('.lima-hk-slider-value');
 
       hkWrap.appendChild(hkFill);
@@ -741,6 +829,7 @@ class LimaLightsCard extends HTMLElement {
 
     // Effects row — clickable if effects exist
     const effectList = getEffects();
+    let effectRowValueEl = null;
     if (effectList.length) {
       const effectRow = document.createElement('div');
       effectRow.className = 'lima-info-row clickable';
@@ -749,13 +838,13 @@ class LimaLightsCard extends HTMLElement {
       effectLabelEl.className = 'lima-info-label';
       effectLabelEl.textContent = 'Effect';
 
-      const effectValueEl = document.createElement('span');
-      effectValueEl.className = 'lima-info-value';
-      effectValueEl.style.color = accent;
-      effectValueEl.textContent = getEffect() ?? 'None ›';
+      effectRowValueEl = document.createElement('span');
+      effectRowValueEl.className = 'lima-info-value';
+      effectRowValueEl.style.color = accent;
+      effectRowValueEl.textContent = getEffect() ?? 'None ›';
 
       effectRow.appendChild(effectLabelEl);
-      effectRow.appendChild(effectValueEl);
+      effectRow.appendChild(effectRowValueEl);
 
       // Open effect picker sheet
       effectRow.addEventListener('click', ev => {
@@ -769,6 +858,8 @@ class LimaLightsCard extends HTMLElement {
     // Live refresh callback — called by hass setter
     this._refreshLightPopup = () => {
       refreshToggle();
+      updateColourCircle();
+      refreshLastChanged();
       if (supportsBri && hkFill && briValueEl) {
         const bri = getBri();
         hkFill.style.width = `${bri}%`;
@@ -781,9 +872,8 @@ class LimaLightsCard extends HTMLElement {
         ctSlider.value = String(getCT());
         ctValueEl.textContent = (getCT() < 3000 ? `${getCT()}K · Warm` : getCT() > 5000 ? `${getCT()}K · Cool` : `${getCT()}K`);
       }
-      if (effectList.length) {
-        const effectValueEl = infoWrap.querySelector('.lima-info-row.clickable .lima-info-value');
-        if (effectValueEl) effectValueEl.textContent = getEffect() ?? 'None ›';
+      if (effectRowValueEl) {
+        effectRowValueEl.textContent = getEffect() ?? 'None ›';
       }
     };
 
@@ -797,6 +887,116 @@ class LimaLightsCard extends HTMLElement {
     lightOverlay.addEventListener('click', e => { if (e.target === lightOverlay) closeLightPopup(); });
     document.body.appendChild(lightOverlay);
     this._lightPopup = lightOverlay;
+  }
+
+  // ── Colour Picker Sheet ───────────────────────────────────────────────────
+
+  _openColourPicker(entityId, accent, popupBg, textCol, circleEl, onUpdate) {
+    const existing = document.getElementById('lima-colour-sheet');
+    if (existing) existing.remove();
+
+    const PRESETS = [
+      { label: 'Warm',    rgb: [255, 180, 107] },
+      { label: 'Candle',  rgb: [255, 147, 41]  },
+      { label: 'Neutral', rgb: [255, 235, 200] },
+      { label: 'White',   rgb: [255, 255, 255] },
+      { label: 'Daylight',rgb: [220, 235, 255] },
+      { label: 'Red',     rgb: [255, 50,  50]  },
+      { label: 'Orange',  rgb: [255, 130, 0]   },
+      { label: 'Yellow',  rgb: [255, 215, 0]   },
+      { label: 'Lime',    rgb: [100, 220, 0]   },
+      { label: 'Green',   rgb: [0,   190, 80]  },
+      { label: 'Teal',    rgb: [0,   200, 180] },
+      { label: 'Cyan',    rgb: [0,   190, 255] },
+      { label: 'Blue',    rgb: [50,  100, 255] },
+      { label: 'Indigo',  rgb: [110, 50,  255] },
+      { label: 'Violet',  rgb: [180, 50,  255] },
+      { label: 'Pink',    rgb: [255, 80,  160] },
+    ];
+
+    const currRgb = this._getRgbColor(entityId);
+
+    const sheet = document.createElement('div');
+    sheet.id = 'lima-colour-sheet';
+    sheet.style.cssText = `position:fixed;inset:0;z-index:11000;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);`;
+
+    const inner = document.createElement('div');
+    inner.style.cssText = `background:${popupBg};border:1px solid rgba(255,255,255,0.13);border-radius:22px;padding:18px;width:100%;max-width:380px;font-family:${this._haFont()};color:${textCol};`;
+
+    const titleRow = document.createElement('div');
+    titleRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;';
+    titleRow.innerHTML = `
+      <div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.06em;">Choose Colour</div>
+      <button style="background:rgba(255,255,255,0.1);border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;color:rgba(255,255,255,0.65);font-size:14px;display:flex;align-items:center;justify-content:center;padding:0;font-family:inherit;">✕</button>`;
+    titleRow.querySelector('button').addEventListener('click', () => sheet.remove());
+    inner.appendChild(titleRow);
+
+    // Swatches grid
+    const grid = document.createElement('div');
+    grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;';
+
+    PRESETS.forEach(({ label, rgb }) => {
+      const isActive = currRgb
+        && Math.abs(currRgb[0] - rgb[0]) < 10
+        && Math.abs(currRgb[1] - rgb[1]) < 10
+        && Math.abs(currRgb[2] - rgb[2]) < 10;
+
+      const swatch = document.createElement('div');
+      swatch.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;';
+
+      const circle = document.createElement('div');
+      circle.style.cssText = `width:44px;height:44px;border-radius:50%;background:rgb(${rgb[0]},${rgb[1]},${rgb[2]});border:2px solid ${isActive ? '#fff' : 'transparent'};transition:transform 0.12s ease,border-color 0.12s;box-shadow:0 2px 8px rgba(0,0,0,0.3);`;
+
+      const lbl = document.createElement('div');
+      lbl.style.cssText = `font-size:10px;color:${isActive ? '#fff' : 'rgba(255,255,255,0.4)'};font-weight:${isActive ? '700' : '500'};text-align:center;`;
+      lbl.textContent = label;
+
+      swatch.appendChild(circle);
+      swatch.appendChild(lbl);
+
+      swatch.addEventListener('mouseenter', () => { circle.style.transform = 'scale(1.12)'; });
+      swatch.addEventListener('mouseleave', () => { circle.style.transform = ''; });
+      swatch.addEventListener('click', ev => {
+        ev.stopPropagation();
+        this._callService('light', 'turn_on', { entity_id: entityId, rgb_color: rgb });
+        if (circleEl) circleEl.style.background = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+        if (onUpdate) onUpdate();
+        sheet.remove();
+      });
+
+      grid.appendChild(swatch);
+    });
+    inner.appendChild(grid);
+
+    // Custom colour picker row
+    const customRow = document.createElement('div');
+    customRow.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid rgba(255,255,255,0.07);';
+    const customLabel = document.createElement('div');
+    customLabel.style.cssText = 'font-size:13px;color:rgba(255,255,255,0.55);font-weight:500;flex:1;';
+    customLabel.textContent = 'Custom colour';
+    const customInput = document.createElement('input');
+    customInput.type = 'color';
+    customInput.value = currRgb
+      ? '#' + currRgb.map(v => v.toString(16).padStart(2, '0')).join('')
+      : '#ffffff';
+    customInput.style.cssText = 'width:36px;height:36px;border:none;border-radius:50%;cursor:pointer;padding:2px;background:none;';
+    customInput.addEventListener('change', () => {
+      const hex = customInput.value;
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      this._callService('light', 'turn_on', { entity_id: entityId, rgb_color: [r, g, b] });
+      if (circleEl) circleEl.style.background = `rgb(${r},${g},${b})`;
+      if (onUpdate) onUpdate();
+      sheet.remove();
+    });
+    customRow.appendChild(customLabel);
+    customRow.appendChild(customInput);
+    inner.appendChild(customRow);
+
+    sheet.appendChild(inner);
+    sheet.addEventListener('click', e => { if (e.target === sheet) sheet.remove(); });
+    document.body.appendChild(sheet);
   }
 
   // ── History Popup ─────────────────────────────────────────────────────────
