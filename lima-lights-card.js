@@ -363,19 +363,27 @@ class LimaLightsCard extends HTMLElement {
         pill.classList.remove('pressing');
       };
 
+      // Shared toggle — used by both click (desktop) and touchend (mobile).
+      // touchstart calls e.preventDefault() which suppresses the synthetic click
+      // on mobile, so touchend must handle the toggle directly.
+      const doToggle = () => {
+        if (didLongPress) return;
+        const isNowOn = this._isOn(entityId);
+        this._callService('light', isNowOn ? 'turn_off' : 'turn_on', { entity_id: entityId });
+      };
+
       pill.addEventListener('mousedown',  () => startPress());
       pill.addEventListener('mouseleave', () => cancelPress());
       pill.addEventListener('mouseup',    () => cancelPress());
       pill.addEventListener('touchstart', (e) => { e.preventDefault(); startPress(); }, { passive: false });
-      pill.addEventListener('touchend',   () => cancelPress(), { passive: true });
+      pill.addEventListener('touchend',   () => { cancelPress(); doToggle(); }, { passive: true });
       pill.addEventListener('touchcancel',() => cancelPress(), { passive: true });
 
+      // click fires on desktop mouse; on mobile the synthetic click is suppressed
+      // by preventDefault() in touchstart so doToggle() is a no-op guard here.
       pill.addEventListener('click', ev => {
         ev.stopPropagation();
-        if (didLongPress) return;
-        // Tap = toggle
-        const isNowOn = this._isOn(entityId);
-        this._callService('light', isNowOn ? 'turn_off' : 'turn_on', { entity_id: entityId });
+        doToggle();
       });
 
       pillsGrid.appendChild(pill);
