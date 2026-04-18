@@ -558,22 +558,48 @@ class LimaLightsCard extends HTMLElement {
     const allBtnsRow = document.createElement('div');
     allBtnsRow.style.cssText = 'display:flex;gap:8px;margin-top:2px;';
 
+    // Flash the given entity pills 3 times, then call the service
+    const flashAndAct = (entityIds, service) => {
+      const pillRefs = entityIds.map(id => pillMap.get(id)).filter(Boolean);
+      let count = 0;
+      const timer = setInterval(() => {
+        const bright = count % 2 === 0;
+        pillRefs.forEach(({ pill }) => {
+          pill.style.outline       = bright ? `2px solid ${accent}` : '';
+          pill.style.outlineOffset = bright ? '-2px' : '';
+          pill.style.opacity       = bright ? '1' : '0.25';
+        });
+        count++;
+        if (count >= 6) {
+          clearInterval(timer);
+          pillRefs.forEach(({ pill }) => {
+            pill.style.outline       = '';
+            pill.style.outlineOffset = '';
+            pill.style.opacity       = '';
+          });
+          entityIds.forEach(id => this._callService('light', service, { entity_id: id }));
+        }
+      }, 160);
+    };
+
     const allOnBtn = document.createElement('button');
     allOnBtn.className = 'lima-all-btn';
     allOnBtn.style.cssText = `background:${accent};color:#000;`;
     allOnBtn.textContent = 'All On';
     allOnBtn.addEventListener('click', ev => {
       ev.stopPropagation();
-      entities.forEach(id => this._callService('light', 'turn_on', { entity_id: id }));
+      const offEntities = entities.filter(id => !this._isOn(id));
+      flashAndAct(offEntities.length ? offEntities : entities, 'turn_on');
     });
 
     const allOffBtn = document.createElement('button');
     allOffBtn.className = 'lima-all-btn';
-    allOffBtn.style.cssText = 'background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.8);';
+    allOffBtn.style.cssText = `background:${accent};color:#000;`;
     allOffBtn.textContent = 'All Off';
     allOffBtn.addEventListener('click', ev => {
       ev.stopPropagation();
-      entities.forEach(id => this._callService('light', 'turn_off', { entity_id: id }));
+      const onEntities = entities.filter(id => this._isOn(id));
+      flashAndAct(onEntities.length ? onEntities : entities, 'turn_off');
     });
 
     allBtnsRow.appendChild(allOnBtn);
