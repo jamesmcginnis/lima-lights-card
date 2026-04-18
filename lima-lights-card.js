@@ -11,6 +11,7 @@ const LIMA_COLOUR_FIELDS = [
   { key: 'pill_bg',      label: 'Pill Background',  desc: 'Background colour of the main pill card.',                default: '#1c1c1e' },
   { key: 'text_color',   label: 'Text',              desc: 'Primary text colour for labels and values.',              default: '#ffffff' },
   { key: 'accent_color', label: 'Accent',            desc: 'Highlight colour used for active states and controls.',   default: '#FFD60A' },
+  { key: 'fill_color',   label: 'Pill Fill',         desc: 'Colour of the fill bar shown when lights are on.',        default: '#FFD60A' },
   { key: 'on_color',     label: 'Light On',          desc: 'Colour used to indicate a light is on.',                 default: '#FFD60A' },
   { key: 'off_color',    label: 'Light Off',         desc: 'Colour used to indicate a light is off.',                default: '#48484A' },
   { key: 'popup_bg',     label: 'Popup Background',  desc: 'Background colour of all popup dialogs.',                default: '#1c1c1e' },
@@ -38,6 +39,7 @@ class LimaLightsCard extends HTMLElement {
       entities:     [],
       title:        '',
       accent_color: '#FFD60A',
+      fill_color:   '#FFD60A',
       on_color:     '#FFD60A',
       off_color:    '#48484A',
       pill_bg:      '#1c1c1e',
@@ -51,6 +53,7 @@ class LimaLightsCard extends HTMLElement {
     this._config = {
       title:        '',
       accent_color: '#FFD60A',
+      fill_color:   '#FFD60A',
       on_color:     '#FFD60A',
       off_color:    '#48484A',
       pill_bg:      '#1c1c1e',
@@ -172,7 +175,7 @@ class LimaLightsCard extends HTMLElement {
         #pill-fill {
           position: absolute; left: 0; top: 0; bottom: 0;
           border-radius: 28px; pointer-events: none; width: 0%;
-          background: rgba(${this._hexToRgb(cfg.accent_color || '#FFD60A')}, 0.18);
+          background: rgba(${this._hexToRgb(cfg.fill_color || cfg.accent_color || '#FFD60A')}, 0.22);
           transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
         }
         .icon-wrap {
@@ -947,6 +950,21 @@ class LimaLightsCard extends HTMLElement {
       });
 
       infoWrap.appendChild(effectRow);
+    }
+
+    // Friendly note for lights that support neither colour nor effects
+    if (!supportsRgb && !effectList.length) {
+      const noteEl = document.createElement('div');
+      noteEl.style.cssText = `margin-top:16px;padding:14px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:14px;display:flex;align-items:flex-start;gap:12px;`;
+      noteEl.innerHTML = `
+        <div style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(255,255,255,0.4)"><path d="M13 9h-2V7h2m0 10h-2v-6h2m-1-9A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2z"/></svg>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:rgba(255,255,255,0.6);margin-bottom:3px;">Basic light only</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.5;">This light doesn't support colour or effects. You can still control brightness and power from here.</div>
+        </div>`;
+      infoWrap.appendChild(noteEl);
     }
 
     // Live refresh callback — called by hass setter
