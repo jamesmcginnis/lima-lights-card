@@ -71,6 +71,8 @@ class LimaLightsCard extends HTMLElement {
   connectedCallback() {}
   disconnectedCallback() {}
 
+  getCardSize() { return 1; }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   _entities() {
@@ -1076,7 +1078,7 @@ if (!customElements.get('lima-lights-card-editor')) {
 window.customCards = window.customCards || [];
 if (!window.customCards.some(c => c.type === 'lima-lights-card')) {
   window.customCards.push({
-    type:        'custom:lima-lights-card',
+    type:        'lima-lights-card',
     name:        'Lima Lights Card',
     preview:     true,
     description: 'Compact pill card showing how many lights are on, with a full control popup for brightness, colour temperature and individual light control.',
