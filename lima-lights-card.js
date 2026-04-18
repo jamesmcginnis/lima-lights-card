@@ -240,7 +240,8 @@ class LimaLightsCard extends HTMLElement {
         padding: 14px 10px; border-radius: 20px; cursor: pointer;
         background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
         transition: transform 0.15s ease, background 0.15s ease, border-color 0.2s, opacity 0.2s;
-        min-width: 0; flex: 1; gap: 6px; position: relative; user-select: none;
+        min-width: 0; flex: 1; gap: 6px; position: relative;
+        user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
         font-family: var(--primary-font-family, inherit);
       }
       .lima-light-pill.is-on  { background: rgba(255,214,10,0.1); border-color: rgba(255,214,10,0.3); }
@@ -338,21 +339,22 @@ class LimaLightsCard extends HTMLElement {
 
       pillMap.set(entityId, { pill, svg: svgEl, briEl });
 
-      // Long-press to toggle, tap to open popup
+      // Tap = toggle on/off, long press (500ms) = open detail popup
+      // Text selection disabled to prevent highlighting on long press
+      pill.style.webkitUserSelect = 'none';
+      pill.style.userSelect       = 'none';
+      pill.style.webkitTouchCallout = 'none';
+
       let longPressTimer = null;
       let didLongPress   = false;
 
       const startPress = () => {
-        didLongPress = false;
+        didLongPress  = false;
         pill.classList.add('pressing');
         longPressTimer = setTimeout(() => {
           didLongPress = true;
           pill.classList.remove('pressing');
-          const isNowOn = this._isOn(entityId);
-          this._callService('light', isNowOn ? 'turn_off' : 'turn_on', { entity_id: entityId });
-          // Brief flash feedback
-          pill.style.opacity = '0.5';
-          setTimeout(() => { pill.style.opacity = ''; }, 200);
+          this._openLightPopup(entityId);
         }, 500);
       };
 
@@ -364,14 +366,16 @@ class LimaLightsCard extends HTMLElement {
       pill.addEventListener('mousedown',  () => startPress());
       pill.addEventListener('mouseleave', () => cancelPress());
       pill.addEventListener('mouseup',    () => cancelPress());
-      pill.addEventListener('touchstart', () => startPress(), { passive: true });
+      pill.addEventListener('touchstart', (e) => { e.preventDefault(); startPress(); }, { passive: false });
       pill.addEventListener('touchend',   () => cancelPress(), { passive: true });
       pill.addEventListener('touchcancel',() => cancelPress(), { passive: true });
 
       pill.addEventListener('click', ev => {
         ev.stopPropagation();
-        if (didLongPress) return; // was a long-press, don't open popup
-        this._openLightPopup(entityId);
+        if (didLongPress) return;
+        // Tap = toggle
+        const isNowOn = this._isOn(entityId);
+        this._callService('light', isNowOn ? 'turn_off' : 'turn_on', { entity_id: entityId });
       });
 
       pillsGrid.appendChild(pill);
@@ -697,17 +701,34 @@ class LimaLightsCard extends HTMLElement {
     // ── Info rows ─────────────────────────────────────────────────────────
     const infoWrap = document.createElement('div');
 
-    // Last changed row
-    const stateObj    = this._hass?.states[entityId];
-    const lastChanged = stateObj?.last_changed || stateObj?.last_updated;
-    let timeAgo = '—';
-    if (lastChanged) {
-      const mins = Math.floor((Date.now() - new Date(lastChanged).getTime()) / 60000);
-      timeAgo = mins < 1 ? 'Just now' : mins < 60 ? `${mins} min ago` : `${Math.floor(mins/60)}h ago`;
-    }
+    // Last changed row — clickable to show history
     const lastRow = document.createElement('div');
-    lastRow.className = 'lima-info-row';
-    lastRow.innerHTML = `<span class="lima-info-label">Last changed</span><span class="lima-info-value">${timeAgo}</span>`;
+    lastRow.className = 'lima-info-row clickable';
+    const lastLabelEl = document.createElement('span');
+    lastLabelEl.className = 'lima-info-label';
+    lastLabelEl.textContent = 'Last changed';
+    const lastValueEl = document.createElement('span');
+    lastValueEl.className = 'lima-info-value';
+    lastValueEl.style.color = accent;
+
+    const refreshLastChanged = () => {
+      const so = this._hass?.states[entityId];
+      const lc = so?.last_changed || so?.last_updated;
+      if (lc) {
+        const mins = Math.floor((Date.now() - new Date(lc).getTime()) / 60000);
+        lastValueEl.textContent = (mins < 1 ? 'Just now' : mins < 60 ? `${mins} min ago` : `${Math.floor(mins/60)}h ago`) + ' ›';
+      } else {
+        lastValueEl.textContent = '— ›';
+      }
+    };
+    refreshLastChanged();
+
+    lastRow.appendChild(lastLabelEl);
+    lastRow.appendChild(lastValueEl);
+    lastRow.addEventListener('click', ev => {
+      ev.stopPropagation();
+      this._openHistoryPopup(entityId, name, accent, popupBg, textCol);
+    });
     infoWrap.appendChild(lastRow);
 
     // Effects row — clickable if effects exist
@@ -770,6 +791,103 @@ class LimaLightsCard extends HTMLElement {
     this._lightPopup = lightOverlay;
   }
 
+  // ── History Popup ─────────────────────────────────────────────────────────
+
+  async _openHistoryPopup(entityId, name, accent, popupBg, textCol) {
+    const existing = document.getElementById('lima-history-sheet');
+    if (existing) existing.remove();
+
+    const sheet = document.createElement('div');
+    sheet.id = 'lima-history-sheet';
+    sheet.style.cssText = `position:fixed;inset:0;z-index:11000;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);`;
+
+    const inner = document.createElement('div');
+    inner.style.cssText = `background:${popupBg};border:1px solid rgba(255,255,255,0.13);border-radius:22px;padding:18px;width:100%;max-width:380px;max-height:70vh;overflow-y:auto;font-family:${this._haFont()};color:${textCol};`;
+
+    const titleRow = document.createElement('div');
+    titleRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;';
+    titleRow.innerHTML = `
+      <div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.06em;">Recent History</div>
+      <button style="background:rgba(255,255,255,0.1);border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;color:rgba(255,255,255,0.65);font-size:14px;display:flex;align-items:center;justify-content:center;padding:0;font-family:inherit;">✕</button>`;
+    titleRow.querySelector('button').addEventListener('click', () => sheet.remove());
+    inner.appendChild(titleRow);
+
+    const loadingEl = document.createElement('div');
+    loadingEl.style.cssText = 'text-align:center;padding:20px;color:rgba(255,255,255,0.25);font-size:13px;';
+    loadingEl.textContent = 'Loading…';
+    inner.appendChild(loadingEl);
+
+    sheet.appendChild(inner);
+    sheet.addEventListener('click', e => { if (e.target === sheet) sheet.remove(); });
+    document.body.appendChild(sheet);
+
+    // Fetch last 24h of history
+    try {
+      const end   = new Date();
+      const start = new Date(end - 24 * 3600000);
+      const resp  = await this._hass.callApi('GET',
+        `history/period/${start.toISOString()}?filter_entity_id=${entityId}&end_time=${end.toISOString()}&minimal_response=true&no_attributes=true`
+      );
+      const raw = (resp?.[0] || []).filter(s => s.state === 'on' || s.state === 'off');
+
+      loadingEl.remove();
+
+      if (!raw.length) {
+        const emptyEl = document.createElement('div');
+        emptyEl.style.cssText = 'text-align:center;padding:20px;color:rgba(255,255,255,0.25);font-size:13px;';
+        emptyEl.textContent = 'No history in the last 24 hours';
+        inner.appendChild(emptyEl);
+        return;
+      }
+
+      // Show most recent first
+      const items = [...raw].reverse();
+      items.forEach((entry, idx) => {
+        const isOn   = entry.state === 'on';
+        const ts     = new Date(entry.last_changed || entry.last_updated);
+        const d      = ts;
+        const timeStr = `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+        const dateStr = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+
+        // Duration: time between this entry and the next (previous in timeline)
+        let durationStr = '';
+        if (idx < items.length - 1) {
+          const nextTs  = new Date(items[idx + 1].last_changed || items[idx + 1].last_updated);
+          const diffMin = Math.round((ts - nextTs) / 60000);
+          durationStr = diffMin < 60
+            ? `${diffMin}m`
+            : `${Math.floor(diffMin / 60)}h ${diffMin % 60}m`;
+        }
+
+        const row = document.createElement('div');
+        row.style.cssText = `display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06);${idx === 0 ? 'border-top:1px solid rgba(255,255,255,0.06);' : ''}`;
+
+        const dot = document.createElement('div');
+        dot.style.cssText = `width:10px;height:10px;border-radius:50%;flex-shrink:0;background:${isOn ? accent : 'rgba(255,255,255,0.2)'};`;
+
+        const info = document.createElement('div');
+        info.style.cssText = 'flex:1;min-width:0;';
+        info.innerHTML = `
+          <div style="font-size:13px;font-weight:600;color:${isOn ? accent : 'rgba(255,255,255,0.45)'};">${isOn ? 'Turned On' : 'Turned Off'}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px;">${dateStr} · ${timeStr}</div>`;
+
+        row.appendChild(dot);
+        row.appendChild(info);
+
+        if (durationStr) {
+          const dur = document.createElement('div');
+          dur.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.3);flex-shrink:0;';
+          dur.textContent = durationStr;
+          row.appendChild(dur);
+        }
+
+        inner.appendChild(row);
+      });
+    } catch(e) {
+      loadingEl.textContent = 'Could not load history';
+    }
+  }
+
   // ── Effect Picker Sheet ───────────────────────────────────────────────────
 
   _openEffectPicker(entityId, effectList, currentEffect, accent, popupBg, textCol) {
@@ -802,7 +920,7 @@ class LimaLightsCard extends HTMLElement {
     effectList.forEach(effect => {
       const btn = document.createElement('button');
       btn.className = `lima-effect-btn${effect === currentEffect ? ' active' : ''}`;
-      btn.textContent = effect;
+      btn.textContent = effect.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
       btn.addEventListener('click', ev => {
         ev.stopPropagation();
         this._callService('light', 'turn_on', { entity_id: entityId, effect });
