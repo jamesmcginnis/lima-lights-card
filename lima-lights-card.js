@@ -169,6 +169,12 @@ class LimaLightsCard extends HTMLElement {
           box-shadow: 0 2px 12px rgba(0,0,0,0.35);
         }
         ha-card:active { transform: scale(0.97); }
+        #pill-fill {
+          position: absolute; left: 0; top: 0; bottom: 0;
+          border-radius: 28px; pointer-events: none; width: 0%;
+          background: rgba(${this._hexToRgb(cfg.accent_color || '#FFD60A')}, 0.18);
+          transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+        }
         .icon-wrap {
           width: 32px; height: 32px;
           border-radius: 50%;
@@ -183,7 +189,8 @@ class LimaLightsCard extends HTMLElement {
         .no-entities { font-size: 12px; color: rgba(255,255,255,0.35); }
       </style>
       <ha-card id="mainCard">
-        <div class="icon-wrap">
+        <div id="pill-fill"></div>
+        <div class="icon-wrap" id="iconWrap">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="${cfg.icon_color || '#FFD60A'}">
             <path d="M12 2a7 7 0 0 1 7 7c0 2.73-1.56 5.1-3.84 6.34L14 17H10l-.16-1.66A7 7 0 0 1 5 9a7 7 0 0 1 7-7zm-2 18h4v1a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-1zm-1-2h6v1H9v-1z"/>
           </svg>
@@ -194,6 +201,10 @@ class LimaLightsCard extends HTMLElement {
       </ha-card>`;
 
     this.shadowRoot.getElementById('mainCard').addEventListener('click', () => this._openOverviewPopup());
+    this.shadowRoot.getElementById('iconWrap').addEventListener('click', e => {
+      e.stopPropagation();
+      this._openToggleAllConfirm();
+    });
     this._update();
   }
 
@@ -212,14 +223,97 @@ class LimaLightsCard extends HTMLElement {
     const total    = entities.length;
     const label    = (cfg.title || '').trim();
     const countTxt = onCount === 0
-      ? 'All off'
+      ? 'All Off'
       : onCount === total
-        ? `All on`
-        : `${onCount} of ${total} on`;
+        ? `All On`
+        : `${onCount} of ${total} On`;
 
     content.innerHTML = label
       ? `<span class="label">${label}</span><span class="count">${countTxt}</span>`
       : `<span class="count">${countTxt}</span>`;
+
+    const fillEl = this.shadowRoot.getElementById('pill-fill');
+    if (fillEl) fillEl.style.width = `${Math.round((onCount / total) * 100)}%`;
+  }
+
+  // ── Toggle-all confirmation dialog ───────────────────────────────────────
+
+  _openToggleAllConfirm() {
+    const entities = this._entities();
+    if (!entities.length) return;
+    const onCount  = entities.filter(e => this._isOn(e)).length;
+    const cfg      = this._config;
+    const accent   = cfg.accent_color || '#FFD60A';
+    const popupBg  = cfg.popup_bg     || '#1c1c1e';
+    const textCol  = cfg.text_color   || '#ffffff';
+
+    const willTurnOff = onCount > 0;
+    const actionCount = willTurnOff ? onCount : entities.length;
+    const actionColor = willTurnOff ? '#FF6432' : accent;
+    const actionText  = willTurnOff ? 'Turn Off' : 'Turn On';
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,0.6);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);`;
+
+    const style = document.createElement('style');
+    style.textContent = `@keyframes limaConfirmPop { from{transform:scale(0.92);opacity:0} to{transform:none;opacity:1} } .lima-confirm-popup { animation: limaConfirmPop 0.22s cubic-bezier(0.34,1.28,0.64,1); }`;
+
+    const popup = document.createElement('div');
+    popup.className = 'lima-confirm-popup';
+    popup.style.cssText = `background:${popupBg};border:1px solid rgba(255,255,255,0.13);border-radius:26px;padding:28px 24px 24px;width:100%;max-width:300px;font-family:${this._haFont()};color:${textCol};text-align:center;box-shadow:0 28px 72px rgba(0,0,0,0.7);`;
+
+    const iconWrap = document.createElement('div');
+    iconWrap.style.cssText = `width:56px;height:56px;border-radius:50%;background:${actionColor}22;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;`;
+    iconWrap.innerHTML = `<svg width="26" height="26" viewBox="0 0 24 24" fill="${actionColor}"><path d="M12 2a7 7 0 0 1 7 7c0 2.73-1.56 5.1-3.84 6.34L14 17H10l-.16-1.66A7 7 0 0 1 5 9a7 7 0 0 1 7-7zm-2 18h4v1a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-1zm-1-2h6v1H9v-1z"/></svg>`;
+
+    const title = document.createElement('div');
+    title.style.cssText = `font-size:18px;font-weight:700;color:${textCol};margin-bottom:10px;`;
+    title.textContent = willTurnOff
+      ? `Turn off ${actionCount} light${actionCount !== 1 ? 's' : ''}?`
+      : `Turn on all ${actionCount} light${actionCount !== 1 ? 's' : ''}?`;
+
+    const subtitle = document.createElement('div');
+    subtitle.style.cssText = `font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:26px;line-height:1.6;`;
+    subtitle.textContent = willTurnOff
+      ? `${actionCount === entities.length ? 'All' : actionCount} light${actionCount !== 1 ? 's are' : ' is'} currently on. Ready to switch ${actionCount !== 1 ? 'them' : 'it'} off?`
+      : `All ${actionCount} light${actionCount !== 1 ? 's are' : ' is'} off. Ready to switch ${actionCount !== 1 ? 'them' : 'it'} all on?`;
+
+    const btnsRow = document.createElement('div');
+    btnsRow.style.cssText = 'display:flex;gap:10px;';
+
+    const close = () => { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); };
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.style.cssText = `flex:1;padding:14px 8px;border-radius:14px;border:none;background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.8);font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.15s;`;
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', close);
+    cancelBtn.addEventListener('mouseenter', () => { cancelBtn.style.background = 'rgba(255,255,255,0.16)'; });
+    cancelBtn.addEventListener('mouseleave', () => { cancelBtn.style.background = 'rgba(255,255,255,0.1)'; });
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.style.cssText = `flex:1;padding:14px 8px;border-radius:14px;border:none;background:${actionColor};color:${willTurnOff ? '#fff' : '#000'};font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:opacity 0.15s;`;
+    confirmBtn.textContent = actionText;
+    confirmBtn.addEventListener('mouseenter', () => { confirmBtn.style.opacity = '0.85'; });
+    confirmBtn.addEventListener('mouseleave', () => { confirmBtn.style.opacity = '1'; });
+    confirmBtn.addEventListener('click', () => {
+      close();
+      if (willTurnOff) {
+        entities.filter(e => this._isOn(e)).forEach(id => this._callService('light', 'turn_off', { entity_id: id }));
+      } else {
+        entities.forEach(id => this._callService('light', 'turn_on', { entity_id: id }));
+      }
+    });
+
+    btnsRow.appendChild(cancelBtn);
+    btnsRow.appendChild(confirmBtn);
+    popup.appendChild(iconWrap);
+    popup.appendChild(title);
+    popup.appendChild(subtitle);
+    popup.appendChild(btnsRow);
+    overlay.appendChild(style);
+    overlay.appendChild(popup);
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    document.body.appendChild(overlay);
   }
 
   // ── Overview Popup ────────────────────────────────────────────────────────
