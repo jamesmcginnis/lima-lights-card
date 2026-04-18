@@ -702,9 +702,9 @@ class LimaLightsCard extends HTMLElement {
     const stateLabelEl = document.createElement('div');
     const toggleBtn    = document.createElement('button');
 
-    // Persistent circle — reflects RGB colour, clickable to open colour picker
+    // Persistent circle — reflects RGB colour, clickable to open colour picker (RGB lights only)
     const circleEl   = document.createElement('div');
-    circleEl.style.cssText = 'font-size:38px;font-weight:700;letter-spacing:-1.5px;line-height:1;cursor:pointer;transition:color 0.2s ease;';
+    circleEl.style.cssText = `font-size:38px;font-weight:700;letter-spacing:-1.5px;line-height:1;cursor:${supportsRgb ? 'pointer' : 'default'};transition:color 0.2s ease;`;
     const stateTextEl = document.createElement('div');
     stateTextEl.style.cssText = 'font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;';
     stateLabelEl.appendChild(circleEl);
@@ -736,6 +736,7 @@ class LimaLightsCard extends HTMLElement {
     });
     circleEl.addEventListener('click', ev => {
       ev.stopPropagation();
+      if (!supportsRgb) return;
       this._openColourPicker(entityId, accent, popupBg, textCol, circleColourProxy, () => {
         circleEl.style.color = getCircleColour();
       });
@@ -952,8 +953,8 @@ class LimaLightsCard extends HTMLElement {
       infoWrap.appendChild(effectRow);
     }
 
-    // Friendly note for lights that support neither colour nor effects
-    if (!supportsRgb && !effectList.length) {
+    // Friendly note for lights that support neither colour (RGB or CT) nor effects
+    if (!supportsRgb && !supportsCT && !effectList.length) {
       const noteEl = document.createElement('div');
       noteEl.style.cssText = `margin-top:16px;padding:14px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:14px;display:flex;align-items:flex-start;gap:12px;`;
       noteEl.innerHTML = `
