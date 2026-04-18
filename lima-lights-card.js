@@ -65,7 +65,11 @@ class LimaLightsCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (!this.shadowRoot.innerHTML) this._render();
-    else this._update();
+    else {
+      this._update();
+      if (this._refreshOverview)   this._refreshOverview();
+      if (this._refreshLightPopup) this._refreshLightPopup();
+    }
   }
 
   connectedCallback() {}
@@ -221,7 +225,6 @@ class LimaLightsCard extends HTMLElement {
     const accent  = cfg.accent_color || '#FFD60A';
     const textCol = cfg.text_color   || '#ffffff';
     const onCol   = cfg.on_color     || '#FFD60A';
-    const offCol  = cfg.off_color    || '#48484A';
 
     const overlay = document.createElement('div');
     overlay.style.cssText = `position:fixed;inset:0;z-index:9999;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:rgba(0,0,0,0.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);`;
@@ -236,13 +239,12 @@ class LimaLightsCard extends HTMLElement {
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         padding: 14px 10px; border-radius: 20px; cursor: pointer;
         background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
-        transition: transform 0.15s ease, background 0.15s ease;
-        min-width: 0; flex: 1; gap: 6px;
+        transition: transform 0.15s ease, background 0.15s ease, border-color 0.2s, opacity 0.2s;
+        min-width: 0; flex: 1; gap: 6px; position: relative; user-select: none;
         font-family: var(--primary-font-family, inherit);
       }
-      .lima-light-pill:active { transform: scale(0.95); background: rgba(255,255,255,0.12); }
-      .lima-light-pill:hover  { background: rgba(255,255,255,0.1); }
       .lima-light-pill.is-on  { background: rgba(255,214,10,0.1); border-color: rgba(255,214,10,0.3); }
+      .lima-light-pill.pressing { transform: scale(0.93); }
       .lima-pill-name { font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.45); text-align: center; letter-spacing: 0.02em; line-height: 1.3; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .lima-close-btn:hover { background:rgba(255,255,255,0.22)!important; }
       .lima-all-btn { flex:1; padding:11px 8px; border-radius:12px; border:none; cursor:pointer; font-size:13px; font-weight:600; transition:background 0.15s,opacity 0.15s; font-family:inherit; }
@@ -267,10 +269,35 @@ class LimaLightsCard extends HTMLElement {
       <button class="lima-close-btn" style="background:rgba(255,255,255,0.1);border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.65);font-size:16px;line-height:1;padding:0;transition:background 0.15s;flex-shrink:0;">✕</button>`;
     headerRow.querySelector('.lima-close-btn').addEventListener('click', () => this._closeOverviewPopup());
 
-    // Stats bar
-    const onCount  = entities.filter(e => this._isOn(e)).length;
-    const offCount = entities.length - onCount;
+    // Pill map — keyed by entityId, holds references to DOM nodes for live updates
+    const pillMap = new Map(); // entityId → { pill, svg, briEl }
 
+    // Stats row references for live update
+    const onStatValueEl  = document.createElement('div');
+    const offStatValueEl = document.createElement('div');
+    onStatValueEl.style.cssText  = `font-size:17px;font-weight:700;letter-spacing:-0.3px;color:${textCol};`;
+    offStatValueEl.style.cssText = `font-size:17px;font-weight:700;letter-spacing:-0.3px;color:${textCol};`;
+
+    // Live refresh — called by hass setter when state changes
+    const refreshOverview = () => {
+      const onCount  = entities.filter(e => this._isOn(e)).length;
+      const offCount = entities.length - onCount;
+      onStatValueEl.textContent  = `${onCount} / ${entities.length}`;
+      offStatValueEl.textContent = `${offCount} / ${entities.length}`;
+
+      pillMap.forEach(({ pill, svg, briEl }, entityId) => {
+        const isOn = this._isOn(entityId);
+        const bri  = this._brightness(entityId);
+        const iconColor = isOn ? onCol : 'rgba(255,255,255,0.2)';
+        pill.classList.toggle('is-on', isOn);
+        svg.setAttribute('fill', iconColor);
+        briEl.style.color = isOn ? onCol : 'rgba(255,255,255,0.25)';
+        briEl.textContent = isOn ? (bri !== null ? `${bri}%` : 'On') : 'Off';
+      });
+    };
+    this._refreshOverview = refreshOverview;
+
+    // Build pills
     const pillsLabel = document.createElement('div');
     pillsLabel.style.cssText = 'font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:rgba(255,255,255,0.3);margin-bottom:10px;';
     pillsLabel.textContent = `${entities.length} Light${entities.length !== 1 ? 's' : ''}`;
@@ -278,57 +305,102 @@ class LimaLightsCard extends HTMLElement {
     const pillsGrid = document.createElement('div');
     pillsGrid.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;';
 
-    // Build pill map for live updates
-    const pillMap = new Map();
-
-    const buildPill = (entityId) => {
+    entities.forEach(entityId => {
       const isOn = this._isOn(entityId);
       const name = this._name(entityId);
       const bri  = this._brightness(entityId);
+
       const pill = document.createElement('div');
       pill.className = `lima-light-pill${isOn ? ' is-on' : ''}`;
 
-      // Bulb SVG icon
       const iconColor = isOn ? onCol : 'rgba(255,255,255,0.2)';
-      pill.innerHTML = `
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="${iconColor}" style="transition:fill 0.2s;">
-          <path d="M12 2a7 7 0 0 1 7 7c0 2.73-1.56 5.1-3.84 6.34L14 17H10l-.16-1.66A7 7 0 0 1 5 9a7 7 0 0 1 7-7zm-2 18h4v1a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-1zm-1-2h6v1H9v-1z"/>
-        </svg>
-        <div style="font-size:12px;font-weight:700;color:${isOn ? onCol : 'rgba(255,255,255,0.25)'};line-height:1;transition:color 0.2s;">${isOn ? (bri !== null ? `${bri}%` : 'On') : 'Off'}</div>
-        <div class="lima-pill-name">${name}</div>`;
+      const svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svgEl.setAttribute('width', '22');
+      svgEl.setAttribute('height', '22');
+      svgEl.setAttribute('viewBox', '0 0 24 24');
+      svgEl.setAttribute('fill', iconColor);
+      svgEl.style.cssText = 'display:block;flex-shrink:0;';
+      const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      pathEl.setAttribute('d', 'M12 2a7 7 0 0 1 7 7c0 2.73-1.56 5.1-3.84 6.34L14 17H10l-.16-1.66A7 7 0 0 1 5 9a7 7 0 0 1 7-7zm-2 18h4v1a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-1zm-1-2h6v1H9v-1z');
+      svgEl.appendChild(pathEl);
 
-      pill.addEventListener('click', ev => { ev.stopPropagation(); this._openLightPopup(entityId); });
-      return pill;
-    };
+      const briEl = document.createElement('div');
+      briEl.style.cssText = `font-size:12px;font-weight:700;color:${isOn ? onCol : 'rgba(255,255,255,0.25)'};line-height:1;`;
+      briEl.textContent = isOn ? (bri !== null ? `${bri}%` : 'On') : 'Off';
 
-    entities.forEach(entityId => {
-      const pill = buildPill(entityId);
+      const nameEl = document.createElement('div');
+      nameEl.className = 'lima-pill-name';
+      nameEl.textContent = name;
+
+      pill.appendChild(svgEl);
+      pill.appendChild(briEl);
+      pill.appendChild(nameEl);
+
+      pillMap.set(entityId, { pill, svg: svgEl, briEl });
+
+      // Long-press to toggle, tap to open popup
+      let longPressTimer = null;
+      let didLongPress   = false;
+
+      const startPress = () => {
+        didLongPress = false;
+        pill.classList.add('pressing');
+        longPressTimer = setTimeout(() => {
+          didLongPress = true;
+          pill.classList.remove('pressing');
+          const isNowOn = this._isOn(entityId);
+          this._callService('light', isNowOn ? 'turn_off' : 'turn_on', { entity_id: entityId });
+          // Brief flash feedback
+          pill.style.opacity = '0.5';
+          setTimeout(() => { pill.style.opacity = ''; }, 200);
+        }, 500);
+      };
+
+      const cancelPress = () => {
+        clearTimeout(longPressTimer);
+        pill.classList.remove('pressing');
+      };
+
+      pill.addEventListener('mousedown',  () => startPress());
+      pill.addEventListener('mouseleave', () => cancelPress());
+      pill.addEventListener('mouseup',    () => cancelPress());
+      pill.addEventListener('touchstart', () => startPress(), { passive: true });
+      pill.addEventListener('touchend',   () => cancelPress(), { passive: true });
+      pill.addEventListener('touchcancel',() => cancelPress(), { passive: true });
+
+      pill.addEventListener('click', ev => {
+        ev.stopPropagation();
+        if (didLongPress) return; // was a long-press, don't open popup
+        this._openLightPopup(entityId);
+      });
+
       pillsGrid.appendChild(pill);
-      pillMap.set(entityId, pill);
     });
 
-    // Stats row: On / Off counts — clickable to highlight
+    // Stats row
     const statsRow = document.createElement('div');
     statsRow.style.cssText = 'display:flex;gap:8px;margin-bottom:18px;';
 
     let activeFilter = null;
 
     const highlightPills = (mode) => {
-      pillMap.forEach((pill, entityId) => {
+      pillMap.forEach(({ pill }, entityId) => {
         const isOn = this._isOn(entityId);
         const match = mode === null || (mode === 'on' && isOn) || (mode === 'off' && !isOn);
         pill.style.outline       = (mode !== null && match) ? `2px solid ${accent}` : '';
         pill.style.outlineOffset = (mode !== null && match) ? '-2px' : '';
-        pill.style.opacity       = (mode !== null && !match) ? '0.3' : '1';
+        pill.style.opacity       = (mode !== null && !match) ? '0.3' : '';
       });
     };
 
-    const makeStatPill = (label, value, mode) => {
+    const makeStatPill = (label, valueEl, mode) => {
       const el = document.createElement('div');
       el.style.cssText = `flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:10px 8px;text-align:center;cursor:pointer;transition:background 0.15s,border-color 0.15s;`;
-      el.innerHTML = `
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">${label}</div>
-        <div style="font-size:17px;font-weight:700;letter-spacing:-0.3px;color:${textCol};">${value}</div>`;
+      const labelDiv = document.createElement('div');
+      labelDiv.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.4);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;';
+      labelDiv.textContent = label;
+      el.appendChild(labelDiv);
+      el.appendChild(valueEl);
       el.classList.add('lima-stat-pill');
       el.dataset.mode = mode;
       el.addEventListener('mouseenter', () => { if (activeFilter !== mode) el.style.background = 'rgba(255,255,255,0.1)'; });
@@ -347,8 +419,13 @@ class LimaLightsCard extends HTMLElement {
       return el;
     };
 
-    statsRow.appendChild(makeStatPill('On',  `${onCount} / ${entities.length}`,  'on'));
-    statsRow.appendChild(makeStatPill('Off', `${offCount} / ${entities.length}`, 'off'));
+    const onCount  = entities.filter(e => this._isOn(e)).length;
+    const offCount = entities.length - onCount;
+    onStatValueEl.textContent  = `${onCount} / ${entities.length}`;
+    offStatValueEl.textContent = `${offCount} / ${entities.length}`;
+
+    statsRow.appendChild(makeStatPill('On',  onStatValueEl,  'on'));
+    statsRow.appendChild(makeStatPill('Off', offStatValueEl, 'off'));
 
     // All On / All Off buttons
     const allBtnsRow = document.createElement('div');
@@ -391,6 +468,7 @@ class LimaLightsCard extends HTMLElement {
 
   _closeOverviewPopup() {
     if (!this._popupOverlay) return;
+    this._refreshOverview = null;
     this._popupOverlay.style.transition = 'opacity 0.18s ease';
     this._popupOverlay.style.opacity = '0';
     setTimeout(() => {
@@ -418,6 +496,7 @@ class LimaLightsCard extends HTMLElement {
     lightOverlay.style.cssText = `position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,0.45);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);`;
 
     const closeLightPopup = () => {
+      this._refreshLightPopup = null;
       lightOverlay.style.transition = 'opacity 0.15s ease';
       lightOverlay.style.opacity = '0';
       setTimeout(() => {
@@ -435,9 +514,32 @@ class LimaLightsCard extends HTMLElement {
       .lima-info-row:last-child { border-bottom:none; }
       .lima-info-label { font-size:12px;color:rgba(255,255,255,0.45);font-weight:500; }
       .lima-info-value { font-size:13px;font-weight:600;color:rgba(255,255,255,0.9);text-align:right; }
-      .lima-slider { -webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;outline:none;cursor:pointer; }
-      .lima-slider::-webkit-slider-thumb { -webkit-appearance:none;appearance:none;width:22px;height:22px;border-radius:50%;cursor:pointer;box-shadow:0 1px 6px rgba(0,0,0,0.4); }
-      .lima-slider::-moz-range-thumb { width:22px;height:22px;border-radius:50%;cursor:pointer;border:none;box-shadow:0 1px 6px rgba(0,0,0,0.4); }
+      .lima-info-row.clickable { cursor:pointer; }
+      .lima-info-row.clickable:hover .lima-info-value { color:#fff; }
+      /* HomeKit-style brightness slider */
+      .lima-hk-slider-wrap {
+        position: relative; width: 100%; height: 56px; border-radius: 14px;
+        overflow: hidden; cursor: pointer; touch-action: none; user-select: none;
+        background: rgba(255,255,255,0.08);
+      }
+      .lima-hk-slider-fill {
+        position: absolute; left: 0; top: 0; bottom: 0;
+        border-radius: 14px; transition: width 0.08s ease;
+      }
+      .lima-hk-slider-label {
+        position: absolute; inset: 0; display: flex; align-items: center;
+        justify-content: space-between; padding: 0 16px; pointer-events: none;
+      }
+      .lima-hk-slider-name { font-size: 13px; font-weight: 600; color: rgba(0,0,0,0.6); }
+      .lima-hk-slider-value { font-size: 13px; font-weight: 700; color: rgba(0,0,0,0.7); }
+      /* CT slider */
+      .lima-ct-slider { -webkit-appearance:none;appearance:none;width:100%;height:32px;border-radius:10px;outline:none;cursor:pointer;background:linear-gradient(to right,#FF9A3C,#FFE566,#fff,#d4eeff); }
+      .lima-ct-slider::-webkit-slider-thumb { -webkit-appearance:none;appearance:none;width:26px;height:26px;border-radius:50%;background:#fff;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.4);border:2px solid rgba(255,255,255,0.9); }
+      .lima-ct-slider::-moz-range-thumb { width:26px;height:26px;border-radius:50%;background:#fff;cursor:pointer;border:2px solid rgba(255,255,255,0.9);box-shadow:0 2px 8px rgba(0,0,0,0.4); }
+      /* Effects sheet */
+      .lima-effect-btn { width:100%;text-align:left;padding:11px 14px;background:rgba(255,255,255,0.06);border:none;border-radius:10px;color:rgba(255,255,255,0.85);font-size:14px;cursor:pointer;transition:background 0.15s;font-family:inherit;margin-bottom:6px; }
+      .lima-effect-btn:hover { background:rgba(255,255,255,0.12); }
+      .lima-effect-btn.active { background:${accent}33;color:${accent}; }
     `;
 
     const popup = document.createElement('div');
@@ -445,11 +547,12 @@ class LimaLightsCard extends HTMLElement {
     popup.style.cssText = `background:${popupBg};backdrop-filter:blur(40px) saturate(180%);-webkit-backdrop-filter:blur(40px) saturate(180%);border:1px solid rgba(255,255,255,0.13);border-radius:26px;box-shadow:0 28px 72px rgba(0,0,0,0.65);padding:20px;width:100%;max-width:380px;max-height:85vh;overflow-y:auto;color:${textCol};font-family:${this._haFont()};`;
     popup.addEventListener('touchmove', e => e.stopPropagation(), { passive: true });
 
-    // Re-read state each time we render this popup
     const getState    = () => this._hass?.states[entityId];
     const getIsOn     = () => getState()?.state === 'on';
     const getBri      = () => { const b = getState()?.attributes?.brightness; return b !== undefined ? Math.round(b / 2.55) : 100; };
     const getCT       = () => getState()?.attributes?.color_temp_kelvin ?? this._minColorTemp(entityId);
+    const getEffect   = () => getState()?.attributes?.effect ?? null;
+    const getEffects  = () => getState()?.attributes?.effect_list ?? [];
     const supportsBri = this._supportsBrightness(entityId);
     const supportsCT  = this._supportsColorTemp(entityId);
     const minCT       = this._minColorTemp(entityId);
@@ -463,138 +566,127 @@ class LimaLightsCard extends HTMLElement {
       <button class="lima-close-btn" style="background:rgba(255,255,255,0.1);border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.65);font-size:16px;line-height:1;padding:0;transition:background 0.15s;flex-shrink:0;">✕</button>`;
     headerRow.querySelector('.lima-close-btn').addEventListener('click', closeLightPopup);
 
-    // Big on/off toggle
+    // On/Off toggle row
     const toggleWrap = document.createElement('div');
-    toggleWrap.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;';
+    toggleWrap.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;';
 
-    const stateLabel = document.createElement('div');
-    const refreshStateLabel = () => {
+    const stateLabelEl = document.createElement('div');
+    const toggleBtn    = document.createElement('button');
+
+    const refreshToggle = () => {
       const isOn = getIsOn();
       const bri  = getBri();
-      stateLabel.innerHTML = `
-        <div style="font-size:42px;font-weight:700;letter-spacing:-1.5px;color:${getIsOn() ? onCol : 'rgba(255,255,255,0.2)'};line-height:1;transition:color 0.2s;">${getIsOn() ? '●' : '○'}</div>
-        <div style="font-size:13px;color:rgba(255,255,255,0.4);margin-top:4px;">${isOn ? (supportsBri ? `${bri}% brightness` : 'On') : 'Off'}</div>`;
-    };
-    refreshStateLabel();
-
-    const toggleBtn = document.createElement('button');
-    const refreshToggleBtn = () => {
-      const isOn = getIsOn();
+      stateLabelEl.innerHTML = `
+        <div style="font-size:38px;font-weight:700;letter-spacing:-1.5px;color:${isOn ? onCol : 'rgba(255,255,255,0.2)'};line-height:1;">${isOn ? '●' : '○'}</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;">${isOn ? (supportsBri ? `${bri}% brightness` : 'On') : 'Off'}</div>`;
       toggleBtn.style.cssText = `background:${isOn ? accent : 'rgba(255,255,255,0.12)'};color:${isOn ? '#000' : 'rgba(255,255,255,0.8)'};border:none;border-radius:14px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;transition:background 0.2s,color 0.2s;font-family:inherit;`;
       toggleBtn.textContent = isOn ? 'Turn Off' : 'Turn On';
     };
-    refreshToggleBtn();
+    refreshToggle();
+
     toggleBtn.addEventListener('click', ev => {
       ev.stopPropagation();
-      const isOn = getIsOn();
-      this._callService('light', isOn ? 'turn_off' : 'turn_on', { entity_id: entityId });
-      // Optimistically update UI after a short delay
-      setTimeout(() => { refreshStateLabel(); refreshToggleBtn(); if (supportsBri) refreshBriLabel(); }, 300);
+      this._callService('light', getIsOn() ? 'turn_off' : 'turn_on', { entity_id: entityId });
     });
 
-    toggleWrap.appendChild(stateLabel);
+    toggleWrap.appendChild(stateLabelEl);
     toggleWrap.appendChild(toggleBtn);
 
-    // Controls wrap
+    // Controls
     const controlsWrap = document.createElement('div');
-    controlsWrap.style.cssText = 'display:flex;flex-direction:column;gap:18px;margin-bottom:18px;';
+    controlsWrap.style.cssText = 'display:flex;flex-direction:column;gap:14px;margin-bottom:18px;';
 
-    // Brightness slider
-    const refreshBriLabel = () => {};
+    // ── HomeKit brightness slider ─────────────────────────────────────────
+    let briValueEl, hkFill;
     if (supportsBri) {
       const briSection = document.createElement('div');
 
       const briHeader = document.createElement('div');
-      briHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;';
+      briHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;';
       const briLabelEl = document.createElement('div');
       briLabelEl.style.cssText = 'font-size:12px;font-weight:600;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.06em;';
       briLabelEl.textContent = 'Brightness';
-      const briValueEl = document.createElement('div');
+      briValueEl = document.createElement('div');
       briValueEl.style.cssText = `font-size:13px;font-weight:700;color:${accent};`;
       briValueEl.textContent = `${getBri()}%`;
       briHeader.appendChild(briLabelEl);
       briHeader.appendChild(briValueEl);
 
-      const briSlider = document.createElement('input');
-      briSlider.type  = 'range';
-      briSlider.min   = '1';
-      briSlider.max   = '100';
-      briSlider.value = String(getBri());
-      briSlider.className = 'lima-slider';
-      briSlider.style.cssText = `background:linear-gradient(to right,${accent} ${getBri()}%,rgba(255,255,255,0.15) ${getBri()}%);`;
-      briSlider.style.setProperty('--thumb-color', accent);
+      // HomeKit-style pill slider
+      const hkWrap = document.createElement('div');
+      hkWrap.className = 'lima-hk-slider-wrap';
 
-      // Inject thumb colour via style tag
-      const sliderStyle = document.createElement('style');
-      sliderStyle.textContent = `
-        .lima-slider { background: linear-gradient(to right, ${accent} 0%, rgba(255,255,255,0.15) 0%); }
-        .lima-slider::-webkit-slider-thumb { background: ${accent}; }
-        .lima-slider::-moz-range-thumb { background: ${accent}; }
-      `;
-      briSection.appendChild(sliderStyle);
+      hkFill = document.createElement('div');
+      hkFill.className = 'lima-hk-slider-fill';
+      hkFill.style.cssText = `background:${accent};width:${getBri()}%;`;
 
-      briSlider.addEventListener('input', () => {
-        const pct = briSlider.value;
+      const hkLabelDiv = document.createElement('div');
+      hkLabelDiv.className = 'lima-hk-slider-label';
+      hkLabelDiv.innerHTML = `<span class="lima-hk-slider-name">💡 ${name}</span><span class="lima-hk-slider-value">${getBri()}%</span>`;
+      const hkValSpan = hkLabelDiv.querySelector('.lima-hk-slider-value');
+
+      hkWrap.appendChild(hkFill);
+      hkWrap.appendChild(hkLabelDiv);
+
+      let hkDragging = false;
+      let briTimer   = null;
+
+      const setFromX = (clientX) => {
+        const rect = hkWrap.getBoundingClientRect();
+        const pct  = Math.min(100, Math.max(1, Math.round(((clientX - rect.left) / rect.width) * 100)));
+        hkFill.style.width  = `${pct}%`;
+        hkValSpan.textContent = `${pct}%`;
         briValueEl.textContent = `${pct}%`;
-        briSlider.style.background = `linear-gradient(to right,${accent} ${pct}%,rgba(255,255,255,0.15) ${pct}%)`;
-      });
-
-      let briTimer = null;
-      briSlider.addEventListener('input', () => {
         clearTimeout(briTimer);
         briTimer = setTimeout(() => {
-          this._callService('light', 'turn_on', { entity_id: entityId, brightness_pct: parseInt(briSlider.value) });
-        }, 200);
-      });
+          this._callService('light', 'turn_on', { entity_id: entityId, brightness_pct: pct });
+        }, 150);
+      };
+
+      hkWrap.addEventListener('mousedown', e => { hkDragging = true; setFromX(e.clientX); });
+      window.addEventListener('mousemove', e => { if (hkDragging) setFromX(e.clientX); });
+      window.addEventListener('mouseup',   () => { hkDragging = false; });
+
+      hkWrap.addEventListener('touchstart', e => { hkDragging = true; setFromX(e.touches[0].clientX); }, { passive: true });
+      hkWrap.addEventListener('touchmove',  e => { if (hkDragging) { e.stopPropagation(); setFromX(e.touches[0].clientX); } }, { passive: true });
+      hkWrap.addEventListener('touchend',   () => { hkDragging = false; });
 
       briSection.appendChild(briHeader);
-      briSection.appendChild(briSlider);
+      briSection.appendChild(hkWrap);
       controlsWrap.appendChild(briSection);
     }
 
-    // Colour temperature slider
+    // ── Colour temperature slider ─────────────────────────────────────────
+    let ctValueEl, ctSlider;
     if (supportsCT) {
       const ctSection = document.createElement('div');
 
       const ctHeader = document.createElement('div');
-      ctHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;';
+      ctHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;';
       const ctLabelEl = document.createElement('div');
       ctLabelEl.style.cssText = 'font-size:12px;font-weight:600;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.06em;';
       ctLabelEl.textContent = 'Colour Temperature';
-      const ctValueEl = document.createElement('div');
+      ctValueEl = document.createElement('div');
       ctValueEl.style.cssText = `font-size:13px;font-weight:700;color:${accent};`;
-      const kelvinToLabel = k => k < 3000 ? `${k}K warm` : k > 5000 ? `${k}K cool` : `${k}K`;
+      const kelvinToLabel = k => k < 3000 ? `${k}K · Warm` : k > 5000 ? `${k}K · Cool` : `${k}K`;
       ctValueEl.textContent = kelvinToLabel(getCT());
       ctHeader.appendChild(ctLabelEl);
       ctHeader.appendChild(ctValueEl);
 
-      const ctSlider = document.createElement('input');
+      ctSlider = document.createElement('input');
       ctSlider.type  = 'range';
       ctSlider.min   = String(minCT);
       ctSlider.max   = String(maxCT);
       ctSlider.value = String(getCT());
-      ctSlider.className = 'lima-slider';
-
-      // Warm-to-cool gradient
-      const ctSliderStyle = document.createElement('style');
-      ctSliderStyle.textContent = `
-        #lima-ct-slider { background: linear-gradient(to right, #FF9A3C, #FFE566, #fff, #d4eeff); }
-        #lima-ct-slider::-webkit-slider-thumb { background: #fff; }
-        #lima-ct-slider::-moz-range-thumb { background: #fff; }
-      `;
-      ctSlider.id = 'lima-ct-slider';
-      ctSection.appendChild(ctSliderStyle);
-
-      ctSlider.addEventListener('input', () => {
-        ctValueEl.textContent = kelvinToLabel(parseInt(ctSlider.value));
-      });
+      ctSlider.className = 'lima-ct-slider';
 
       let ctTimer = null;
       ctSlider.addEventListener('input', () => {
+        ctValueEl.textContent = kelvinToLabel(parseInt(ctSlider.value));
         clearTimeout(ctTimer);
         ctTimer = setTimeout(() => {
           this._callService('light', 'turn_on', { entity_id: entityId, color_temp_kelvin: parseInt(ctSlider.value) });
-        }, 200);
+        }, 150);
       });
 
       ctSection.appendChild(ctHeader);
@@ -602,8 +694,10 @@ class LimaLightsCard extends HTMLElement {
       controlsWrap.appendChild(ctSection);
     }
 
-    // Info rows
+    // ── Info rows ─────────────────────────────────────────────────────────
     const infoWrap = document.createElement('div');
+
+    // Last changed row
     const stateObj    = this._hass?.states[entityId];
     const lastChanged = stateObj?.last_changed || stateObj?.last_updated;
     let timeAgo = '—';
@@ -611,17 +705,58 @@ class LimaLightsCard extends HTMLElement {
       const mins = Math.floor((Date.now() - new Date(lastChanged).getTime()) / 60000);
       timeAgo = mins < 1 ? 'Just now' : mins < 60 ? `${mins} min ago` : `${Math.floor(mins/60)}h ago`;
     }
-    const infoRows = [{ label: 'Last changed', value: timeAgo }];
-    if (stateObj?.attributes?.effect_list?.length) {
-      infoRows.push({ label: 'Effects available', value: stateObj.attributes.effect_list.length });
+    const lastRow = document.createElement('div');
+    lastRow.className = 'lima-info-row';
+    lastRow.innerHTML = `<span class="lima-info-label">Last changed</span><span class="lima-info-value">${timeAgo}</span>`;
+    infoWrap.appendChild(lastRow);
+
+    // Effects row — clickable if effects exist
+    const effectList = getEffects();
+    if (effectList.length) {
+      const effectRow = document.createElement('div');
+      effectRow.className = 'lima-info-row clickable';
+
+      const effectLabelEl = document.createElement('span');
+      effectLabelEl.className = 'lima-info-label';
+      effectLabelEl.textContent = 'Effect';
+
+      const effectValueEl = document.createElement('span');
+      effectValueEl.className = 'lima-info-value';
+      effectValueEl.style.color = accent;
+      effectValueEl.textContent = getEffect() ?? 'None ›';
+
+      effectRow.appendChild(effectLabelEl);
+      effectRow.appendChild(effectValueEl);
+
+      // Open effect picker sheet
+      effectRow.addEventListener('click', ev => {
+        ev.stopPropagation();
+        this._openEffectPicker(entityId, effectList, getEffect(), accent, popupBg, textCol);
+      });
+
+      infoWrap.appendChild(effectRow);
     }
 
-    infoRows.forEach(({ label, value }) => {
-      const row = document.createElement('div');
-      row.className = 'lima-info-row';
-      row.innerHTML = `<span class="lima-info-label">${label}</span><span class="lima-info-value">${value}</span>`;
-      infoWrap.appendChild(row);
-    });
+    // Live refresh callback — called by hass setter
+    this._refreshLightPopup = () => {
+      refreshToggle();
+      if (supportsBri && hkFill && briValueEl) {
+        const bri = getBri();
+        hkFill.style.width = `${bri}%`;
+        briValueEl.textContent = `${bri}%`;
+        // Also update the label inside the slider
+        const hkVal = hkFill.parentElement?.querySelector('.lima-hk-slider-value');
+        if (hkVal) hkVal.textContent = `${bri}%`;
+      }
+      if (supportsCT && ctSlider && ctValueEl) {
+        ctSlider.value = String(getCT());
+        ctValueEl.textContent = (getCT() < 3000 ? `${getCT()}K · Warm` : getCT() > 5000 ? `${getCT()}K · Cool` : `${getCT()}K`);
+      }
+      if (effectList.length) {
+        const effectValueEl = infoWrap.querySelector('.lima-info-row.clickable .lima-info-value');
+        if (effectValueEl) effectValueEl.textContent = getEffect() ?? 'None ›';
+      }
+    };
 
     popup.appendChild(style);
     popup.appendChild(headerRow);
@@ -633,6 +768,52 @@ class LimaLightsCard extends HTMLElement {
     lightOverlay.addEventListener('click', e => { if (e.target === lightOverlay) closeLightPopup(); });
     document.body.appendChild(lightOverlay);
     this._lightPopup = lightOverlay;
+  }
+
+  // ── Effect Picker Sheet ───────────────────────────────────────────────────
+
+  _openEffectPicker(entityId, effectList, currentEffect, accent, popupBg, textCol) {
+    const existing = document.getElementById('lima-effect-sheet');
+    if (existing) existing.remove();
+
+    const sheet = document.createElement('div');
+    sheet.id = 'lima-effect-sheet';
+    sheet.style.cssText = `position:fixed;inset:0;z-index:11000;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);`;
+
+    const inner = document.createElement('div');
+    inner.style.cssText = `background:${popupBg};border:1px solid rgba(255,255,255,0.13);border-radius:22px;padding:18px;width:100%;max-width:380px;max-height:70vh;overflow-y:auto;font-family:${this._haFont()};`;
+
+    const title = document.createElement('div');
+    title.style.cssText = 'font-size:13px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px;';
+    title.textContent = 'Choose Effect';
+    inner.appendChild(title);
+
+    // None option
+    const noneBtn = document.createElement('button');
+    noneBtn.className = `lima-effect-btn${!currentEffect ? ' active' : ''}`;
+    noneBtn.textContent = 'None';
+    noneBtn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      this._callService('light', 'turn_on', { entity_id: entityId, effect: 'none' });
+      sheet.remove();
+    });
+    inner.appendChild(noneBtn);
+
+    effectList.forEach(effect => {
+      const btn = document.createElement('button');
+      btn.className = `lima-effect-btn${effect === currentEffect ? ' active' : ''}`;
+      btn.textContent = effect;
+      btn.addEventListener('click', ev => {
+        ev.stopPropagation();
+        this._callService('light', 'turn_on', { entity_id: entityId, effect });
+        sheet.remove();
+      });
+      inner.appendChild(btn);
+    });
+
+    sheet.appendChild(inner);
+    sheet.addEventListener('click', e => { if (e.target === sheet) sheet.remove(); });
+    document.body.appendChild(sheet);
   }
 }
 
