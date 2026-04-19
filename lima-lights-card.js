@@ -351,7 +351,7 @@ class LimaLightsCard extends HTMLElement {
         transition: transform 0.15s ease, background 0.15s ease, border-color 0.2s, opacity 0.2s;
         min-width: 0; flex: 1; gap: 6px; position: relative;
         user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
-        touch-action: pan-y;
+        touch-action: none;
         font-family: var(--primary-font-family, inherit);
       }
       .lima-light-pill.is-on  { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.3); }
@@ -513,6 +513,7 @@ class LimaLightsCard extends HTMLElement {
       };
 
       let touchStartY = 0;
+      let lastTouchY  = 0;
       let touchMoved  = false;
 
       pill.addEventListener('mousedown',  () => startPress());
@@ -521,14 +522,20 @@ class LimaLightsCard extends HTMLElement {
 
       pill.addEventListener('touchstart', (e) => {
         touchStartY = e.touches[0].clientY;
+        lastTouchY  = e.touches[0].clientY;
         touchMoved  = false;
         startPress();
       }, { passive: true });
 
       pill.addEventListener('touchmove', (e) => {
-        if (Math.abs(e.touches[0].clientY - touchStartY) > 8) {
+        const currentY = e.touches[0].clientY;
+        const dy = currentY - lastTouchY;
+        lastTouchY = currentY;
+        if (Math.abs(currentY - touchStartY) > 8) {
           touchMoved = true;
           cancelPress();
+          // Manually scroll the popup since touch-action:none blocks native scroll
+          popup.scrollTop -= dy;
         }
       }, { passive: true });
 
