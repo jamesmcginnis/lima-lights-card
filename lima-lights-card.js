@@ -869,34 +869,10 @@ class LimaLightsCard extends HTMLElement {
       rowCount++;
     }
 
-    // Last changed row
-    let lastValEl;
-    const refreshLastChanged = () => {
-      if (!lastValEl) return;
-      const so = this._hass?.states[entityId];
-      const lc = so?.last_changed || so?.last_updated;
-      if (!lc) { lastValEl.innerHTML = '— <span class="lima-hk-chevron">›</span>'; return; }
-      const mins = Math.floor((Date.now() - new Date(lc).getTime()) / 60000);
-      const txt = mins < 1 ? 'Just now' : mins < 60 ? `${mins}m ago` : `${Math.floor(mins/60)}h ago`;
-      lastValEl.innerHTML = `${txt} <span class="lima-hk-chevron">›</span>`;
-    };
-    if (rowCount > 0) addSep();
-    const lastRow = document.createElement('div');
-    lastRow.className = 'lima-hk-row tappable';
-    const lastLbl = document.createElement('span');
-    lastLbl.className = 'lima-hk-row-label'; lastLbl.textContent = 'Last changed';
-    lastValEl = document.createElement('span');
-    lastValEl.className = 'lima-hk-row-value';
-    refreshLastChanged();
-    lastRow.appendChild(lastLbl); lastRow.appendChild(lastValEl);
-    lastRow.addEventListener('click', ev => { ev.stopPropagation(); this._openHistoryPopup(entityId, name, accent, popupBg, textCol); });
-    listCard.appendChild(lastRow);
-
     // ── Live refresh ──────────────────────────────────────────────────────
     this._refreshLightPopup = () => {
       refreshToggle();
       updateColourCircle();
-      refreshLastChanged();
       if (supportsBri && hkFill && vPctSpan) {
         const bri = getBri();
         hkFill.style.height = `${bri}%`;
