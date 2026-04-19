@@ -336,7 +336,7 @@ class LimaLightsCard extends HTMLElement {
     const onCol   = cfg.on_color     || '#FFD60A';
 
     const overlay = document.createElement('div');
-    overlay.style.cssText = `position:fixed;inset:0;z-index:9999;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:rgba(0,0,0,0.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);overflow-y:auto;-webkit-overflow-scrolling:touch;`;
+    overlay.style.cssText = `position:fixed;inset:0;z-index:9999;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:rgba(0,0,0,0.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);`;
 
     const style = document.createElement('style');
     style.textContent = `
@@ -364,7 +364,7 @@ class LimaLightsCard extends HTMLElement {
 
     const popup = document.createElement('div');
     popup.className = 'lima-popup';
-    popup.style.cssText = `background:${popupBg};backdrop-filter:blur(40px) saturate(180%);-webkit-backdrop-filter:blur(40px) saturate(180%);border:1px solid rgba(255,255,255,0.13);border-radius:28px;box-shadow:0 28px 72px rgba(0,0,0,0.65);padding:20px;width:100%;max-width:420px;color:${textCol};font-family:${this._haFont()};`;
+    popup.style.cssText = `background:${popupBg};backdrop-filter:blur(40px) saturate(180%);-webkit-backdrop-filter:blur(40px) saturate(180%);border:1px solid rgba(255,255,255,0.13);border-radius:28px;box-shadow:0 28px 72px rgba(0,0,0,0.65);padding:20px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto;-webkit-overflow-scrolling:touch;color:${textCol};font-family:${this._haFont()};`;
 
     // Header
     const headerRow = document.createElement('div');
@@ -654,6 +654,13 @@ class LimaLightsCard extends HTMLElement {
     overlay.id = 'lima-overlay';
     overlay.appendChild(popup);
     overlay.addEventListener('click', e => { if (e.target === overlay) this._closeOverviewPopup(); });
+
+    // Block HA page scroll while open; allow touches inside the popup through so it can scroll.
+    this._blockBodyScroll = (e) => {
+      if (!popup.contains(e.target)) e.preventDefault();
+    };
+    document.addEventListener('touchmove', this._blockBodyScroll, { passive: false });
+
     document.body.appendChild(overlay);
     this._popupOverlay = overlay;
   }
@@ -661,6 +668,8 @@ class LimaLightsCard extends HTMLElement {
   _closeOverviewPopup() {
     if (!this._popupOverlay) return;
     this._refreshOverview = null;
+    document.removeEventListener('touchmove', this._blockBodyScroll);
+    this._blockBodyScroll = null;
     this._popupOverlay.style.transition = 'opacity 0.18s ease';
     this._popupOverlay.style.opacity = '0';
     setTimeout(() => {
