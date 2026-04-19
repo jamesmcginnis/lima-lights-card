@@ -771,21 +771,28 @@ class LimaLightsCard extends HTMLElement {
     headerRow.appendChild(nameLine);
     headerRow.appendChild(closeBtn);
 
-    // ── Toggle button ─────────────────────────────────────────────────────
+    // ── Toggle button (HomeKit round power icon) ───────────────────────────
     const toggleBtn = document.createElement('button');
     const applyToggleStyle = (on) => {
-      const col = on ? getSliderColor() : 'rgba(255,255,255,0.1)';
-      toggleBtn.style.cssText = `width:100%;background:${col};color:${on ? '#000' : 'rgba(255,255,255,0.75)'};border:none;border-radius:16px;padding:15px;font-size:16px;font-weight:600;cursor:pointer;transition:background 0.25s,color 0.25s;font-family:inherit;letter-spacing:-0.2px;margin-top:16px;`;
-      toggleBtn.textContent = on ? 'Turn Off' : 'Turn On';
+      const col = on ? getSliderColor() : 'rgba(255,255,255,0.12)';
+      const iconCol = on ? '#000' : 'rgba(255,255,255,0.5)';
+      toggleBtn.style.cssText = `width:64px;height:64px;border-radius:50%;background:${col};border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.25s,transform 0.1s;flex-shrink:0;box-shadow:${on ? `0 4px 20px ${col}66` : 'none'};`;
+      toggleBtn.innerHTML = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="${iconCol}" stroke-width="2" stroke-linecap="round"><path d="M12 3v4M6.3 6.3A8 8 0 1 0 17.7 6.3"/></svg>`;
     };
     const refreshToggle = () => { optimisticOn = getIsOn(); applyToggleStyle(optimisticOn); };
     applyToggleStyle(optimisticOn);
+    toggleBtn.addEventListener('mouseenter', () => { toggleBtn.style.transform = 'scale(1.08)'; });
+    toggleBtn.addEventListener('mouseleave', () => { toggleBtn.style.transform = ''; });
     toggleBtn.addEventListener('click', ev => {
       ev.stopPropagation();
       optimisticOn = !optimisticOn;
       applyToggleStyle(optimisticOn);
       this._callService('light', optimisticOn ? 'turn_on' : 'turn_off', { entity_id: entityId });
     });
+
+    // Wrap it centred with a little top margin
+    const toggleWrap = document.createElement('div');
+    toggleWrap.style.cssText = 'display:flex;justify-content:center;margin-top:20px;';
 
     // ── Brightness slider (centred) ───────────────────────────────────────
     let hkFill, vPctSpan;
@@ -882,12 +889,13 @@ class LimaLightsCard extends HTMLElement {
       }
     };
 
-    // ── Layout: header → slider → info → toggle ───────────────────────────
+    // ── Layout: header → slider → info → power button ─────────────────────
     popup.appendChild(style);
     popup.appendChild(headerRow);
     if (supportsBri) popup.appendChild(centreArea);
     popup.appendChild(listCard);
-    popup.appendChild(toggleBtn);
+    toggleWrap.appendChild(toggleBtn);
+    popup.appendChild(toggleWrap);
 
     lightOverlay.appendChild(popup);
     lightOverlay.addEventListener('click', e => { if (e.target === lightOverlay) closeLightPopup(); });
