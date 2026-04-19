@@ -397,6 +397,7 @@ class LimaLightsCard extends HTMLElement {
 
       pillMap.forEach(({ pill, svg, briEl }, entityId) => {
         const isOn       = this._isOn(entityId);
+        pill.dataset.optimisticOn = String(isOn);
         const bri        = this._brightness(entityId);
         const rgb        = this._hass?.states[entityId]?.attributes?.rgb_color;
         const pillColour = (isOn && rgb) ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : onCol;
@@ -462,97 +463,129 @@ class LimaLightsCard extends HTMLElement {
       pill.appendChild(briEl);
       pill.appendChild(nameEl);
 
-      pill.dataset.entityId = entityId;
+      pill.dataset.entityId   = entityId;
+      pill.dataset.optimisticOn = String(isOn);
       pillMap.set(entityId, { pill, svg: svgEl, briEl });
 
-      // Tap = toggle on/off, long press (500ms) = open detail popup
-      pill.style.webkitUserSelect = 'none';
-      pill.style.userSelect       = 'none';
-      pill.style.webkitTouchCallout = 'none';
-
+      // Mouse events (desktop) — each pill gets its own timer/flag
       let longPressTimer = null;
       let didLongPress   = false;
 
-      const startPress = () => {
-        didLongPress  = false;
+      pill.addEventListener('mousedown',  () => {
+        didLongPress = false;
         pill.classList.add('pressing');
         longPressTimer = setTimeout(() => {
           didLongPress = true;
           pill.classList.remove('pressing');
           this._openLightPopup(pill.dataset.entityId);
         }, 500);
-      };
-
-      const cancelPress = () => {
+      });
+      pill.addEventListener('mouseleave', () => { clearTimeout(longPressTimer); pill.classList.remove('pressing'); });
+      pill.addEventListener('mouseup',    () => {
         clearTimeout(longPressTimer);
         pill.classList.remove('pressing');
-      };
-
-      // Track intended state locally so taps always toggle correctly
-      // even before HA confirms the state change.
-      let optimisticOn = this._isOn(entityId);
-
-      const doToggle = () => {
-        if (didLongPress) return;
-        const eid      = pill.dataset.entityId;
-        const willBeOn = !optimisticOn;
-        optimisticOn   = willBeOn;
-        this._callService('light', willBeOn ? 'turn_on' : 'turn_off', { entity_id: eid });
-        const pillRef  = pillMap.get(eid);
-        if (pillRef) {
-          const rgb        = this._hass?.states[eid]?.attributes?.rgb_color;
-          const pillColour = (willBeOn && rgb) ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : onCol;
-          pillRef.pill.classList.toggle('is-on', willBeOn);
-          if (willBeOn) {
-            pillRef.pill.style.background  = `rgba(${rgb ? `${rgb[0]},${rgb[1]},${rgb[2]}` : '255,255,255'},0.12)`;
-            pillRef.pill.style.borderColor = `rgba(${rgb ? `${rgb[0]},${rgb[1]},${rgb[2]}` : '255,255,255'},0.35)`;
-          } else {
-            pillRef.pill.style.background  = '';
-            pillRef.pill.style.borderColor = '';
+        if (!didLongPress) {
+          const eid    = pill.dataset.entityId;
+          const wasOn  = pill.dataset.optimisticOn === 'true';
+          const willOn = !wasOn;
+          pill.dataset.optimisticOn = String(willOn);
+          this._callService('light', willOn ? 'turn_on' : 'turn_off', { entity_id: eid });
+          const ref = pillMap.get(eid);
+          if (ref) {
+            const rgb = this._hass?.states[eid]?.attributes?.rgb_color;
+            const col = (willOn && rgb) ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : onCol;
+            ref.pill.classList.toggle('is-on', willOn);
+            ref.pill.style.background  = willOn ? `rgba(${rgb ? `${rgb[0]},${rgb[1]},${rgb[2]}` : '255,255,255'},0.12)` : '';
+            ref.pill.style.borderColor = willOn ? `rgba(${rgb ? `${rgb[0]},${rgb[1]},${rgb[2]}` : '255,255,255'},0.35)` : '';
+            ref.svg.setAttribute('fill', willOn ? col : 'rgba(255,255,255,0.2)');
+            ref.briEl.style.color = willOn ? col : 'rgba(255,255,255,0.25)';
+            ref.briEl.textContent = willOn ? 'On' : 'Off';
           }
-          pillRef.svg.setAttribute('fill', willBeOn ? pillColour : 'rgba(255,255,255,0.2)');
-          pillRef.briEl.style.color = willBeOn ? pillColour : 'rgba(255,255,255,0.25)';
-          pillRef.briEl.textContent = willBeOn ? 'On' : 'Off';
         }
-      };
-
-      let touchStartY = 0;
-      let lastTouchY  = 0;
-      let touchMoved  = false;
-
-      pill.addEventListener('mousedown',  () => startPress());
-      pill.addEventListener('mouseleave', () => cancelPress());
-      pill.addEventListener('mouseup',    () => { cancelPress(); doToggle(); });
-
-      pill.addEventListener('touchstart', (e) => {
-        touchStartY = e.touches[0].clientY;
-        lastTouchY  = e.touches[0].clientY;
-        touchMoved  = false;
-        startPress();
-      }, { passive: true });
-
-      pill.addEventListener('touchmove', (e) => {
-        const currentY = e.touches[0].clientY;
-        const dy = currentY - lastTouchY;
-        lastTouchY = currentY;
-        if (Math.abs(currentY - touchStartY) > 8) {
-          touchMoved = true;
-          cancelPress();
-          // Manually scroll the popup since touch-action:none blocks native scroll
-          popup.scrollTop -= dy;
-        }
-      }, { passive: true });
-
-      pill.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        cancelPress();
-        if (!touchMoved) doToggle();
-      }, { passive: false });
-
-      pill.addEventListener('touchcancel', () => { cancelPress(); touchMoved = false; }, { passive: true });
+      });
 
       pillsGrid.appendChild(pill);
     });
+
+    // ── Single delegated touch handler on the grid ────────────────────────
+    // Uses elementFromPoint at touchstart to identify the exact pill under
+    // the finger — immune to browser touch re-targeting.
+    let activePill      = null;
+    let activeLongTimer = null;
+    let activeDidLong   = false;
+    let activeTouchStartY = 0;
+    let activeLastTouchY  = 0;
+    let activeTouchMoved  = false;
+
+    const doToggle = (eid) => {
+      const ref = pillMap.get(eid);
+      if (!ref) return;
+      const pill   = ref.pill;
+      const wasOn  = pill.dataset.optimisticOn === 'true';
+      const willOn = !wasOn;
+      pill.dataset.optimisticOn = String(willOn);
+      this._callService('light', willOn ? 'turn_on' : 'turn_off', { entity_id: eid });
+      const rgb = this._hass?.states[eid]?.attributes?.rgb_color;
+      const col = (willOn && rgb) ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : onCol;
+      ref.pill.classList.toggle('is-on', willOn);
+      ref.pill.style.background  = willOn ? `rgba(${rgb ? `${rgb[0]},${rgb[1]},${rgb[2]}` : '255,255,255'},0.12)` : '';
+      ref.pill.style.borderColor = willOn ? `rgba(${rgb ? `${rgb[0]},${rgb[1]},${rgb[2]}` : '255,255,255'},0.35)` : '';
+      ref.svg.setAttribute('fill', willOn ? col : 'rgba(255,255,255,0.2)');
+      ref.briEl.style.color = willOn ? col : 'rgba(255,255,255,0.25)';
+      ref.briEl.textContent = willOn ? 'On' : 'Off';
+    };
+
+    pillsGrid.addEventListener('touchstart', (e) => {
+      const touch = e.touches[0];
+      // Use elementFromPoint to get the real element under the finger
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      activePill = el?.closest('[data-entity-id]');
+      if (!activePill) return;
+
+      activeDidLong      = false;
+      activeTouchMoved   = false;
+      activeTouchStartY  = touch.clientY;
+      activeLastTouchY   = touch.clientY;
+
+      activePill.classList.add('pressing');
+      activeLongTimer = setTimeout(() => {
+        activeDidLong = true;
+        activePill.classList.remove('pressing');
+        this._openLightPopup(activePill.dataset.entityId);
+        activePill = null;
+      }, 500);
+    }, { passive: true });
+
+    pillsGrid.addEventListener('touchmove', (e) => {
+      if (!activePill) return;
+      const currentY = e.touches[0].clientY;
+      const dy = currentY - activeLastTouchY;
+      activeLastTouchY = currentY;
+      if (Math.abs(currentY - activeTouchStartY) > 8) {
+        activeTouchMoved = true;
+        clearTimeout(activeLongTimer);
+        activePill.classList.remove('pressing');
+        popup.scrollTop -= dy;
+      }
+    }, { passive: true });
+
+    pillsGrid.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      clearTimeout(activeLongTimer);
+      if (activePill) {
+        activePill.classList.remove('pressing');
+        if (!activeTouchMoved && !activeDidLong) {
+          doToggle(activePill.dataset.entityId);
+        }
+        activePill = null;
+      }
+    }, { passive: false });
+
+    pillsGrid.addEventListener('touchcancel', () => {
+      clearTimeout(activeLongTimer);
+      if (activePill) { activePill.classList.remove('pressing'); activePill = null; }
+      activeTouchMoved = false;
+    }, { passive: true });
 
     // Stats row
     const statsRow = document.createElement('div');
