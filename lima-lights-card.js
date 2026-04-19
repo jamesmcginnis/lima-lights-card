@@ -490,11 +490,17 @@ class LimaLightsCard extends HTMLElement {
         }
       };
 
+      let touchStartY = 0;
+
       pill.addEventListener('mousedown',  () => startPress());
       pill.addEventListener('mouseleave', () => cancelPress());
       pill.addEventListener('mouseup',    () => cancelPress());
-      pill.addEventListener('touchstart', (e) => { e.preventDefault(); startPress(); }, { passive: false });
-      pill.addEventListener('touchend',   () => { cancelPress(); doToggle(); }, { passive: true });
+      pill.addEventListener('touchstart', (e) => { e.preventDefault(); touchStartY = e.touches[0].clientY; startPress(); }, { passive: false });
+      pill.addEventListener('touchend',   (e) => {
+        cancelPress();
+        const moved = Math.abs((e.changedTouches[0]?.clientY ?? touchStartY) - touchStartY);
+        if (moved < 8) doToggle();
+      }, { passive: true });
       pill.addEventListener('touchcancel',() => cancelPress(), { passive: true });
 
       // click fires on desktop mouse; on mobile the synthetic click is suppressed
