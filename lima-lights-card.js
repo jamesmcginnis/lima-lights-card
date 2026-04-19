@@ -721,69 +721,29 @@ class LimaLightsCard extends HTMLElement {
       <button class="lima-close-btn" style="background:rgba(255,255,255,0.1);border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.65);font-size:16px;line-height:1;padding:0;transition:background 0.15s;flex-shrink:0;">✕</button>`;
     headerRow.querySelector('.lima-close-btn').addEventListener('click', closeLightPopup);
 
-    // On/Off toggle row
+    // On/Off toggle row — full-width button only
     const toggleWrap = document.createElement('div');
-    toggleWrap.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;';
+    toggleWrap.style.cssText = 'margin-bottom:20px;';
 
-    const stateLabelEl = document.createElement('div');
-    const toggleBtn    = document.createElement('button');
-
-    // Persistent circle — reflects RGB colour, clickable to open colour picker (RGB lights only)
-    const circleEl   = document.createElement('div');
-    circleEl.style.cssText = `font-size:38px;font-weight:700;letter-spacing:-1.5px;line-height:1;cursor:${supportsRgb ? 'pointer' : 'default'};transition:color 0.2s ease;`;
-    const stateTextEl = document.createElement('div');
-    stateTextEl.style.cssText = 'font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;';
-    stateLabelEl.appendChild(circleEl);
-    stateLabelEl.appendChild(stateTextEl);
-
-    const getCircleColour = () => {
-      const rgb = getRgb();
-      if (!getIsOn()) return 'rgba(255,255,255,0.2)';
-      return rgb ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : onCol;
-    };
+    const toggleBtn = document.createElement('button');
 
     const refreshToggle = () => {
       const isOn = getIsOn();
-      const bri  = getBri();
-      circleEl.textContent    = isOn ? '●' : '○';
-      circleEl.style.color    = getCircleColour();
-      stateTextEl.textContent = isOn ? (supportsBri ? `${bri}% brightness` : 'On') : 'Off';
-      toggleBtn.style.cssText = `background:${isOn ? accent : 'rgba(255,255,255,0.12)'};color:${isOn ? '#000' : 'rgba(255,255,255,0.8)'};border:none;border-radius:14px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;transition:background 0.2s,color 0.2s;font-family:inherit;`;
+      toggleBtn.style.cssText = `width:100%;background:${isOn ? accent : 'rgba(255,255,255,0.12)'};color:${isOn ? '#000' : 'rgba(255,255,255,0.8)'};border:none;border-radius:14px;padding:14px 24px;font-size:15px;font-weight:700;cursor:pointer;transition:background 0.2s,color 0.2s;font-family:inherit;`;
       toggleBtn.textContent = isOn ? 'Turn Off' : 'Turn On';
     };
     refreshToggle();
-
-    // Clicking the circle opens the colour picker; a proxy forwards background → color
-    // so _openColourPicker's circleEl.style.background call updates our text colour
-    const circleColourProxy = { style: {} };
-    Object.defineProperty(circleColourProxy.style, 'background', {
-      set: val => { circleEl.style.color = val; },
-      get: () => circleEl.style.color,
-    });
-    circleEl.addEventListener('click', ev => {
-      ev.stopPropagation();
-      if (!supportsRgb) return;
-      this._openColourPicker(entityId, accent, popupBg, textCol, circleColourProxy, () => {
-        circleEl.style.color = getCircleColour();
-      });
-    });
 
     toggleBtn.addEventListener('click', ev => {
       ev.stopPropagation();
       const wasOn = getIsOn();
       this._callService('light', wasOn ? 'turn_off' : 'turn_on', { entity_id: entityId });
-      // Optimistic: show anticipated state immediately before HA state arrives
+      // Optimistic update
       const willBeOn = !wasOn;
-      const bri = getBri();
-      const rgb = getRgb();
-      circleEl.textContent    = willBeOn ? '●' : '○';
-      circleEl.style.color    = willBeOn ? (rgb ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : onCol) : 'rgba(255,255,255,0.2)';
-      stateTextEl.textContent = willBeOn ? (supportsBri ? bri + '% brightness' : 'On') : 'Off';
-      toggleBtn.style.cssText = `background:${willBeOn ? accent : 'rgba(255,255,255,0.12)'};color:${willBeOn ? '#000' : 'rgba(255,255,255,0.8)'};border:none;border-radius:14px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;transition:background 0.2s,color 0.2s;font-family:inherit;`;
+      toggleBtn.style.cssText = `width:100%;background:${willBeOn ? accent : 'rgba(255,255,255,0.12)'};color:${willBeOn ? '#000' : 'rgba(255,255,255,0.8)'};border:none;border-radius:14px;padding:14px 24px;font-size:15px;font-weight:700;cursor:pointer;transition:background 0.2s,color 0.2s;font-family:inherit;`;
       toggleBtn.textContent = willBeOn ? 'Turn Off' : 'Turn On';
     });
 
-    toggleWrap.appendChild(stateLabelEl);
     toggleWrap.appendChild(toggleBtn);
 
     // Controls
