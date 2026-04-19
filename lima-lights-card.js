@@ -351,6 +351,7 @@ class LimaLightsCard extends HTMLElement {
         transition: transform 0.15s ease, background 0.15s ease, border-color 0.2s, opacity 0.2s;
         min-width: 0; flex: 1; gap: 6px; position: relative;
         user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+        touch-action: pan-y;
         font-family: var(--primary-font-family, inherit);
       }
       .lima-light-pill.is-on  { background: rgba(255,214,10,0.1); border-color: rgba(255,214,10,0.3); }
