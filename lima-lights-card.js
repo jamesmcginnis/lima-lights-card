@@ -351,7 +351,7 @@ class LimaLightsCard extends HTMLElement {
         transition: transform 0.15s ease, background 0.15s ease, border-color 0.2s, opacity 0.2s;
         min-width: 0; flex: 1; gap: 6px; position: relative;
         user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
-        touch-action: pan-y;
+        touch-action: none;
         font-family: var(--primary-font-family, inherit);
       }
       .lima-light-pill.is-on  { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.3); }
@@ -463,10 +463,10 @@ class LimaLightsCard extends HTMLElement {
       pill.appendChild(briEl);
       pill.appendChild(nameEl);
 
+      pill.dataset.entityId = entityId;
       pillMap.set(entityId, { pill, svg: svgEl, briEl });
 
       // Tap = toggle on/off, long press (500ms) = open detail popup
-      // Text selection disabled to prevent highlighting on long press
       pill.style.webkitUserSelect = 'none';
       pill.style.userSelect       = 'none';
       pill.style.webkitTouchCallout = 'none';
@@ -480,7 +480,7 @@ class LimaLightsCard extends HTMLElement {
         longPressTimer = setTimeout(() => {
           didLongPress = true;
           pill.classList.remove('pressing');
-          this._openLightPopup(entityId);
+          this._openLightPopup(pill.dataset.entityId);
         }, 500);
       };
 
@@ -489,18 +489,15 @@ class LimaLightsCard extends HTMLElement {
         pill.classList.remove('pressing');
       };
 
-      // Shared toggle — used by both click (desktop) and touchend (mobile).
-      // touchstart calls e.preventDefault() which suppresses the synthetic click
-      // on mobile, so touchend must handle the toggle directly.
       const doToggle = () => {
         if (didLongPress) return;
-        const isNowOn = this._isOn(entityId);
-        this._callService('light', isNowOn ? 'turn_off' : 'turn_on', { entity_id: entityId });
-        // Optimistic visual update — reflects change immediately before HA state arrives
+        const eid     = pill.dataset.entityId;
+        const isNowOn = this._isOn(eid);
+        this._callService('light', isNowOn ? 'turn_off' : 'turn_on', { entity_id: eid });
         const willBeOn = !isNowOn;
-        const pillRef = pillMap.get(entityId);
+        const pillRef  = pillMap.get(eid);
         if (pillRef) {
-          const rgb        = this._hass?.states[entityId]?.attributes?.rgb_color;
+          const rgb        = this._hass?.states[eid]?.attributes?.rgb_color;
           const pillColour = (willBeOn && rgb) ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : onCol;
           pillRef.pill.classList.toggle('is-on', willBeOn);
           if (willBeOn) {
@@ -516,16 +513,16 @@ class LimaLightsCard extends HTMLElement {
         }
       };
 
-      let touchStartY  = 0;
-      let touchMoved   = false;
+      let touchStartY = 0;
+      let touchMoved  = false;
 
       pill.addEventListener('mousedown',  () => startPress());
       pill.addEventListener('mouseleave', () => cancelPress());
-      pill.addEventListener('mouseup',    () => cancelPress());
+      pill.addEventListener('mouseup',    () => { cancelPress(); doToggle(); });
 
       pill.addEventListener('touchstart', (e) => {
-        touchStartY  = e.touches[0].clientY;
-        touchMoved   = false;
+        touchStartY = e.touches[0].clientY;
+        touchMoved  = false;
         startPress();
       }, { passive: true });
 
@@ -537,24 +534,12 @@ class LimaLightsCard extends HTMLElement {
       }, { passive: true });
 
       pill.addEventListener('touchend', (e) => {
+        e.preventDefault();
         cancelPress();
-        if (!touchMoved) {
-          e.preventDefault(); // suppress synthetic click so it doesn't land on a scrolled pill
-          doToggle();
-        }
+        if (!touchMoved) doToggle();
       }, { passive: false });
 
       pill.addEventListener('touchcancel', () => { cancelPress(); touchMoved = false; }, { passive: true });
-
-      // click handles desktop mouse only — touch is fully handled by touchend above.
-      // Guard against the synthetic click some browsers fire after touchend.
-      let lastWasTouch = false;
-      pill.addEventListener('touchstart', () => { lastWasTouch = true; }, { passive: true });
-      pill.addEventListener('click', ev => {
-        ev.stopPropagation();
-        if (lastWasTouch) { lastWasTouch = false; return; }
-        doToggle();
-      });
 
       pillsGrid.appendChild(pill);
     });
