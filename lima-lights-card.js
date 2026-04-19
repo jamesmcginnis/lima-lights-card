@@ -488,12 +488,16 @@ class LimaLightsCard extends HTMLElement {
         pill.classList.remove('pressing');
       };
 
+      // Track intended state locally so taps always toggle correctly
+      // even before HA confirms the state change.
+      let optimisticOn = this._isOn(entityId);
+
       const doToggle = () => {
         if (didLongPress) return;
-        const eid     = pill.dataset.entityId;
-        const isNowOn = this._isOn(eid);
-        this._callService('light', isNowOn ? 'turn_off' : 'turn_on', { entity_id: eid });
-        const willBeOn = !isNowOn;
+        const eid      = pill.dataset.entityId;
+        const willBeOn = !optimisticOn;
+        optimisticOn   = willBeOn;
+        this._callService('light', willBeOn ? 'turn_on' : 'turn_off', { entity_id: eid });
         const pillRef  = pillMap.get(eid);
         if (pillRef) {
           const rgb        = this._hass?.states[eid]?.attributes?.rgb_color;
