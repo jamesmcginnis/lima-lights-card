@@ -365,7 +365,6 @@ class LimaLightsCard extends HTMLElement {
     const popup = document.createElement('div');
     popup.className = 'lima-popup';
     popup.style.cssText = `background:${popupBg};backdrop-filter:blur(40px) saturate(180%);-webkit-backdrop-filter:blur(40px) saturate(180%);border:1px solid rgba(255,255,255,0.13);border-radius:28px;box-shadow:0 28px 72px rgba(0,0,0,0.65);padding:20px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto;color:${textCol};font-family:${this._haFont()};`;
-    popup.addEventListener('touchmove', e => e.stopPropagation(), { passive: true });
 
     // Header
     const headerRow = document.createElement('div');
@@ -741,8 +740,6 @@ class LimaLightsCard extends HTMLElement {
     const popup = document.createElement('div');
     popup.className = 'lima-light-popup';
     popup.style.cssText = `background:${popupBg};backdrop-filter:blur(60px) saturate(200%);-webkit-backdrop-filter:blur(60px) saturate(200%);border:1px solid rgba(255,255,255,0.1);border-radius:32px;box-shadow:0 40px 80px rgba(0,0,0,0.7);padding:24px;width:100%;max-width:340px;color:${textCol};font-family:${this._haFont()};`;
-    popup.addEventListener('touchmove', e => e.stopPropagation(), { passive: true });
-
     const getState       = () => this._hass?.states[entityId];
     const getIsOn        = () => getState()?.state === 'on';
     const getBri         = () => { const b = getState()?.attributes?.brightness; return b !== undefined ? Math.round(b / 2.55) : 100; };
@@ -773,33 +770,11 @@ class LimaLightsCard extends HTMLElement {
     headerRow.appendChild(nameLine);
     headerRow.appendChild(closeBtn);
 
-    // ── Central area: slider (if supported) + bulb icon ──────────────────
+    // ── Central area: slider ──────────────────────────────────────────────
     let hkFill, vPctSpan;
 
     const centreArea = document.createElement('div');
     centreArea.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:12px;margin-bottom:24px;';
-
-    // Large bulb icon — colour reflects current state
-    const bulbWrap = document.createElement('div');
-    bulbWrap.style.cssText = `width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background 0.3s ease;`;
-
-    const bulbSvg = document.createElementNS('http://www.w3.org/2000/svg','svg');
-    bulbSvg.setAttribute('width','34'); bulbSvg.setAttribute('height','34');
-    bulbSvg.setAttribute('viewBox','0 0 24 24');
-    const bulbPath = document.createElementNS('http://www.w3.org/2000/svg','path');
-    bulbPath.setAttribute('d','M12 2a7 7 0 0 1 7 7c0 2.73-1.56 5.1-3.84 6.34L14 17H10l-.16-1.66A7 7 0 0 1 5 9a7 7 0 0 1 7-7zm-2 18h4v1a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-1zm-1-2h6v1H9v-1z');
-    bulbSvg.appendChild(bulbPath);
-    bulbWrap.appendChild(bulbSvg);
-
-    const updateBulb = () => {
-      const isOn = getIsOn();
-      const rgb  = getRgb();
-      const col  = (isOn && rgb) ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : isOn ? accent : 'rgba(255,255,255,0.2)';
-      const bg   = isOn ? `${col}22` : 'rgba(255,255,255,0.06)';
-      bulbWrap.style.background = bg;
-      bulbPath.setAttribute('fill', col);
-    };
-    updateBulb();
 
     if (supportsBri) {
       const vSliderWrap = document.createElement('div');
@@ -838,14 +813,6 @@ class LimaLightsCard extends HTMLElement {
       centreArea.appendChild(vSliderWrap);
     }
 
-    centreArea.appendChild(bulbWrap);
-
-    // Brightness label under bulb
-    const briLabel = document.createElement('div');
-    briLabel.style.cssText = `font-size:13px;font-weight:500;color:rgba(255,255,255,0.4);`;
-    briLabel.textContent = supportsBri ? `${getBri()}% brightness` : (getIsOn() ? 'On' : 'Off');
-    centreArea.appendChild(briLabel);
-
     // ── Toggle button (HomeKit-style pill) ────────────────────────────────
     const toggleBtn = document.createElement('button');
     const refreshToggle = () => {
@@ -853,8 +820,6 @@ class LimaLightsCard extends HTMLElement {
       const sliderCol = getSliderColor();
       toggleBtn.style.cssText = `width:100%;background:${isOn ? sliderCol : 'rgba(255,255,255,0.1)'};color:${isOn ? '#000' : 'rgba(255,255,255,0.75)'};border:none;border-radius:16px;padding:15px;font-size:16px;font-weight:600;cursor:pointer;transition:background 0.25s,color 0.25s,transform 0.1s;font-family:inherit;letter-spacing:-0.2px;margin-bottom:16px;`;
       toggleBtn.textContent = isOn ? 'Turn Off' : 'Turn On';
-      if (supportsBri) briLabel.textContent = `${getBri()}% brightness`;
-      else briLabel.textContent = isOn ? 'On' : 'Off';
     };
     refreshToggle();
     toggleBtn.addEventListener('mouseenter', () => { toggleBtn.style.transform = 'scale(1.01)'; });
@@ -866,7 +831,6 @@ class LimaLightsCard extends HTMLElement {
       const willBeOn = !wasOn;
       toggleBtn.style.cssText = `width:100%;background:${willBeOn ? accent : 'rgba(255,255,255,0.1)'};color:${willBeOn ? '#000' : 'rgba(255,255,255,0.75)'};border:none;border-radius:16px;padding:15px;font-size:16px;font-weight:600;cursor:pointer;transition:background 0.25s,color 0.25s,transform 0.1s;font-family:inherit;letter-spacing:-0.2px;margin-bottom:16px;`;
       toggleBtn.textContent = willBeOn ? 'Turn Off' : 'Turn On';
-      briLabel.textContent = supportsBri ? `${getBri()}% brightness` : (willBeOn ? 'On' : 'Off');
     });
 
     // ── Info list (grouped card, HomeKit-style) ───────────────────────────
@@ -971,7 +935,6 @@ class LimaLightsCard extends HTMLElement {
     this._refreshLightPopup = () => {
       refreshToggle();
       updateColourCircle();
-      updateBulb();
       refreshLastChanged();
       if (supportsBri && hkFill && vPctSpan) {
         const bri = getBri();
