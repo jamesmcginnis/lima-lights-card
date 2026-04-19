@@ -491,8 +491,9 @@ class LimaLightsCard extends HTMLElement {
         }
       };
 
-      let touchStartY  = 0;
-      let touchMoved   = false;
+      let touchStartY       = 0;
+      let touchMoved        = false;
+      let suppressNextClick = false;
 
       pill.addEventListener('mousedown',  () => startPress());
       pill.addEventListener('mouseleave', () => cancelPress());
@@ -513,18 +514,27 @@ class LimaLightsCard extends HTMLElement {
 
       pill.addEventListener('touchend', (e) => {
         cancelPress();
+        // Always suppress the synthetic click the browser fires after touchend.
+        // Without this flag, the click can land on a *different* pill if the
+        // popup scrolled between touchstart and touchend, toggling the wrong light.
+        suppressNextClick = true;
+        setTimeout(() => { suppressNextClick = false; }, 600);
         if (!touchMoved) {
-          e.preventDefault(); // suppress synthetic click so it doesn't land on a scrolled pill
+          e.preventDefault();
           doToggle();
         }
       }, { passive: false });
 
-      pill.addEventListener('touchcancel', () => { cancelPress(); touchMoved = false; }, { passive: true });
+      pill.addEventListener('touchcancel', () => {
+        cancelPress();
+        touchMoved        = false;
+        suppressNextClick = true;
+        setTimeout(() => { suppressNextClick = false; }, 600);
+      }, { passive: true });
 
-      // click handles desktop mouse only (touch is handled above via touchend).
-      // On mobile the synthetic click is suppressed by preventDefault() in touchend
-      // so this listener is effectively a no-op for touch devices.
+      // click handles desktop mouse only — touch is fully handled by touchend above.
       pill.addEventListener('click', ev => {
+        if (suppressNextClick) { ev.stopPropagation(); return; }
         ev.stopPropagation();
         doToggle();
       });
