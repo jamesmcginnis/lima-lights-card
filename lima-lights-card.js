@@ -174,9 +174,9 @@ class LimaLightsCard extends HTMLElement {
         ha-card:active { transform: scale(0.97); }
         #pill-fill {
           position: absolute; left: 0; top: 0; bottom: 0;
-          border-radius: 28px; pointer-events: none; width: 0%;
+          border-radius: 28px 0 0 28px; pointer-events: none; width: 0%;
           background: rgba(${this._hexToRgb(cfg.fill_color || cfg.accent_color || '#FFD60A')}, 0.22);
-          transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+          transition: width 0.5s cubic-bezier(0.4,0,0.2,1), border-radius 0.3s ease;
         }
         .icon-wrap {
           width: 32px; height: 32px;
@@ -236,7 +236,10 @@ class LimaLightsCard extends HTMLElement {
       : `<span class="count">${countTxt}</span>`;
 
     const fillEl = this.shadowRoot.getElementById('pill-fill');
-    if (fillEl) fillEl.style.width = `${Math.round((onCount / total) * 100)}%`;
+    if (fillEl) {
+      fillEl.style.width        = `${Math.round((onCount / total) * 100)}%`;
+      fillEl.style.borderRadius = onCount === total ? '28px' : '28px 0 0 28px';
+    }
   }
 
   // ── Toggle-all confirmation dialog ───────────────────────────────────────
