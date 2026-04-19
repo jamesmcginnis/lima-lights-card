@@ -775,7 +775,7 @@ class LimaLightsCard extends HTMLElement {
     const toggleBtn = document.createElement('button');
     const applyToggleStyle = (on) => {
       const col = on ? getSliderColor() : 'rgba(255,255,255,0.1)';
-      toggleBtn.style.cssText = `width:100%;background:${col};color:${on ? '#000' : 'rgba(255,255,255,0.75)'};border:none;border-radius:16px;padding:15px;font-size:16px;font-weight:600;cursor:pointer;transition:background 0.25s,color 0.25s;font-family:inherit;letter-spacing:-0.2px;margin-bottom:20px;`;
+      toggleBtn.style.cssText = `width:100%;background:${col};color:${on ? '#000' : 'rgba(255,255,255,0.75)'};border:none;border-radius:16px;padding:15px;font-size:16px;font-weight:600;cursor:pointer;transition:background 0.25s,color 0.25s;font-family:inherit;letter-spacing:-0.2px;margin-top:16px;`;
       toggleBtn.textContent = on ? 'Turn Off' : 'Turn On';
     };
     const refreshToggle = () => { optimisticOn = getIsOn(); applyToggleStyle(optimisticOn); };
@@ -906,12 +906,12 @@ class LimaLightsCard extends HTMLElement {
       }
     };
 
-    // ── Layout: header → toggle → slider → info ───────────────────────────
+    // ── Layout: header → slider → info → toggle ───────────────────────────
     popup.appendChild(style);
     popup.appendChild(headerRow);
-    popup.appendChild(toggleBtn);
     if (supportsBri) popup.appendChild(centreArea);
     popup.appendChild(listCard);
+    popup.appendChild(toggleBtn);
 
     lightOverlay.appendChild(popup);
     lightOverlay.addEventListener('click', e => { if (e.target === lightOverlay) closeLightPopup(); });
