@@ -700,35 +700,38 @@ class LimaLightsCard extends HTMLElement {
 
     const style = document.createElement('style');
     style.textContent = `
-      @keyframes limaLightUp { from{transform:translateY(20px) scale(0.97);opacity:0} to{transform:none;opacity:1} }
-      .lima-light-popup { animation: limaLightUp 0.26s cubic-bezier(0.34,1.28,0.64,1); }
-      .lima-close-btn:hover { background:rgba(255,255,255,0.22)!important; }
-      .lima-info-row { display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.07); }
-      .lima-info-row:last-child { border-bottom:none; }
-      .lima-info-label { font-size:12px;color:rgba(255,255,255,0.45);font-weight:500; }
-      .lima-info-value { font-size:13px;font-weight:600;color:rgba(255,255,255,0.9);text-align:right; }
-      .lima-info-row.clickable { cursor:pointer; }
-      .lima-info-row.clickable:hover .lima-info-value { color:#fff; }
-      /* Vertical brightness slider */
+      @keyframes limaLightUp { from{transform:translateY(30px) scale(0.96);opacity:0} to{transform:none;opacity:1} }
+      .lima-light-popup { animation: limaLightUp 0.32s cubic-bezier(0.34,1.2,0.64,1); }
+      /* HomeKit-style vertical slider */
       .lima-vslider-wrap {
-        position:relative; width:64px; border-radius:20px;
+        position:relative; width:80px; height:220px; border-radius:26px;
         overflow:hidden; cursor:pointer; touch-action:none; user-select:none;
-        background:rgba(255,255,255,0.08); flex-shrink:0;
+        background:rgba(255,255,255,0.07); flex-shrink:0;
+        box-shadow:inset 0 2px 8px rgba(0,0,0,0.3);
       }
       .lima-vslider-fill {
         position:absolute; left:0; right:0; bottom:0;
-        border-radius:20px; transition:height 0.08s ease;
+        border-radius:26px; transition:height 0.06s ease;
       }
       .lima-vslider-pct {
-        position:absolute; top:12px; left:0; right:0;
-        text-align:center; font-size:12px; font-weight:700;
-        color:rgba(255,255,255,0.9); pointer-events:none; letter-spacing:-0.3px;
+        position:absolute; bottom:16px; left:0; right:0;
+        text-align:center; font-size:13px; font-weight:700;
+        color:rgba(0,0,0,0.55); pointer-events:none; letter-spacing:-0.3px;
       }
-      .lima-vslider-label {
-        position:absolute; bottom:12px; left:0; right:0;
-        text-align:center; font-size:10px; font-weight:600;
-        color:rgba(255,255,255,0.4); pointer-events:none; text-transform:uppercase; letter-spacing:0.05em;
+      .lima-vslider-pct.dim {
+        color:rgba(255,255,255,0.4);
       }
+      /* Info list */
+      .lima-hk-row {
+        display:flex; align-items:center; justify-content:space-between;
+        padding:11px 14px; cursor:default;
+      }
+      .lima-hk-row.tappable { cursor:pointer; }
+      .lima-hk-row.tappable:active { background:rgba(255,255,255,0.05); }
+      .lima-hk-row-label { font-size:14px; font-weight:500; color:rgba(255,255,255,0.85); }
+      .lima-hk-row-value { font-size:14px; font-weight:500; color:rgba(255,255,255,0.4); display:flex; align-items:center; gap:4px; }
+      .lima-hk-row-value.accent { color:${accent}; }
+      .lima-hk-chevron { font-size:12px; color:rgba(255,255,255,0.25); }
       /* Effects sheet */
       .lima-effect-btn { width:100%;text-align:left;padding:11px 14px;background:rgba(255,255,255,0.06);border:none;border-radius:10px;color:rgba(255,255,255,0.85);font-size:14px;cursor:pointer;transition:background 0.15s;font-family:inherit;margin-bottom:6px; }
       .lima-effect-btn:hover { background:rgba(255,255,255,0.12); }
@@ -737,79 +740,152 @@ class LimaLightsCard extends HTMLElement {
 
     const popup = document.createElement('div');
     popup.className = 'lima-light-popup';
-    popup.style.cssText = `background:${popupBg};backdrop-filter:blur(40px) saturate(180%);-webkit-backdrop-filter:blur(40px) saturate(180%);border:1px solid rgba(255,255,255,0.13);border-radius:26px;box-shadow:0 28px 72px rgba(0,0,0,0.65);padding:20px;width:100%;max-width:380px;max-height:85vh;overflow-y:auto;color:${textCol};font-family:${this._haFont()};`;
+    popup.style.cssText = `background:${popupBg};backdrop-filter:blur(60px) saturate(200%);-webkit-backdrop-filter:blur(60px) saturate(200%);border:1px solid rgba(255,255,255,0.1);border-radius:32px;box-shadow:0 40px 80px rgba(0,0,0,0.7);padding:24px;width:100%;max-width:340px;color:${textCol};font-family:${this._haFont()};`;
     popup.addEventListener('touchmove', e => e.stopPropagation(), { passive: true });
 
-    const getState    = () => this._hass?.states[entityId];
-    const getIsOn     = () => getState()?.state === 'on';
-    const getBri      = () => { const b = getState()?.attributes?.brightness; return b !== undefined ? Math.round(b / 2.55) : 100; };
+    const getState       = () => this._hass?.states[entityId];
+    const getIsOn        = () => getState()?.state === 'on';
+    const getBri         = () => { const b = getState()?.attributes?.brightness; return b !== undefined ? Math.round(b / 2.55) : 100; };
     const getSliderColor = () => { const rgb = this._getRgbColor(entityId); return (rgb && getIsOn()) ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : accent; };
-    const getCT       = () => getState()?.attributes?.color_temp_kelvin ?? this._minColorTemp(entityId);
-    const getEffect   = () => getState()?.attributes?.effect ?? null;
-    const getEffects  = () => getState()?.attributes?.effect_list ?? [];
-    const supportsBri = this._supportsBrightness(entityId);
-    const supportsCT  = this._supportsColorTemp(entityId);
-    const supportsRgb = this._supportsRgb(entityId);
-    const getRgb      = () => this._getRgbColor(entityId);
-    const minCT       = this._minColorTemp(entityId);
-    const maxCT       = this._maxColorTemp(entityId);
+    const getEffect      = () => getState()?.attributes?.effect ?? null;
+    const getEffects     = () => getState()?.attributes?.effect_list ?? [];
+    const supportsBri    = this._supportsBrightness(entityId);
+    const supportsCT     = this._supportsColorTemp(entityId);
+    const supportsRgb    = this._supportsRgb(entityId);
+    const getRgb         = () => this._getRgbColor(entityId);
 
-    // ── Vertical brightness slider ────────────────────────────────────────
+    // ── Header: light name + close ────────────────────────────────────────
+    const headerRow = document.createElement('div');
+    headerRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;';
+
+    const nameLine = document.createElement('div');
+    nameLine.style.cssText = 'display:flex;flex-direction:column;gap:2px;';
+    nameLine.innerHTML = `
+      <span style="font-size:17px;font-weight:700;color:${textCol};letter-spacing:-0.3px;">${name}</span>`;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.style.cssText = `background:rgba(255,255,255,0.1);border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.6);font-size:15px;line-height:1;padding:0;transition:background 0.15s;flex-shrink:0;`;
+    closeBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+    closeBtn.addEventListener('click', closeLightPopup);
+    closeBtn.addEventListener('mouseenter', () => { closeBtn.style.background = 'rgba(255,255,255,0.18)'; });
+    closeBtn.addEventListener('mouseleave', () => { closeBtn.style.background = 'rgba(255,255,255,0.1)'; });
+
+    headerRow.appendChild(nameLine);
+    headerRow.appendChild(closeBtn);
+
+    // ── Central area: slider (if supported) + bulb icon ──────────────────
     let hkFill, vPctSpan;
-    const vSliderWrap = document.createElement('div');
-    vSliderWrap.className = 'lima-vslider-wrap';
+
+    const centreArea = document.createElement('div');
+    centreArea.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:12px;margin-bottom:24px;';
+
+    // Large bulb icon — colour reflects current state
+    const bulbWrap = document.createElement('div');
+    bulbWrap.style.cssText = `width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background 0.3s ease;`;
+
+    const bulbSvg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    bulbSvg.setAttribute('width','34'); bulbSvg.setAttribute('height','34');
+    bulbSvg.setAttribute('viewBox','0 0 24 24');
+    const bulbPath = document.createElementNS('http://www.w3.org/2000/svg','path');
+    bulbPath.setAttribute('d','M12 2a7 7 0 0 1 7 7c0 2.73-1.56 5.1-3.84 6.34L14 17H10l-.16-1.66A7 7 0 0 1 5 9a7 7 0 0 1 7-7zm-2 18h4v1a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-1zm-1-2h6v1H9v-1z');
+    bulbSvg.appendChild(bulbPath);
+    bulbWrap.appendChild(bulbSvg);
+
+    const updateBulb = () => {
+      const isOn = getIsOn();
+      const rgb  = getRgb();
+      const col  = (isOn && rgb) ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : isOn ? accent : 'rgba(255,255,255,0.2)';
+      const bg   = isOn ? `${col}22` : 'rgba(255,255,255,0.06)';
+      bulbWrap.style.background = bg;
+      bulbPath.setAttribute('fill', col);
+    };
+    updateBulb();
 
     if (supportsBri) {
+      const vSliderWrap = document.createElement('div');
+      vSliderWrap.className = 'lima-vslider-wrap';
+
       hkFill = document.createElement('div');
       hkFill.className = 'lima-vslider-fill';
       hkFill.style.cssText = `background:${getSliderColor()};height:${getBri()}%;`;
 
       vPctSpan = document.createElement('div');
-      vPctSpan.className = 'lima-vslider-pct';
+      vPctSpan.className = `lima-vslider-pct${getBri() < 25 ? ' dim' : ''}`;
       vPctSpan.textContent = `${getBri()}%`;
-
-      const vLabelSpan = document.createElement('div');
-      vLabelSpan.className = 'lima-vslider-label';
-      vLabelSpan.textContent = '☀';
 
       vSliderWrap.appendChild(hkFill);
       vSliderWrap.appendChild(vPctSpan);
-      vSliderWrap.appendChild(vLabelSpan);
 
-      let vDragging = false;
-      let briTimer  = null;
-
+      let vDragging = false, briTimer = null;
       const setFromY = (clientY) => {
         const rect = vSliderWrap.getBoundingClientRect();
         const pct  = Math.min(100, Math.max(1, Math.round((1 - (clientY - rect.top) / rect.height) * 100)));
         hkFill.style.height = `${pct}%`;
         vPctSpan.textContent = `${pct}%`;
+        vPctSpan.className = `lima-vslider-pct${pct < 25 ? ' dim' : ''}`;
         clearTimeout(briTimer);
         briTimer = setTimeout(() => {
           this._callService('light', 'turn_on', { entity_id: entityId, brightness_pct: pct });
         }, 150);
       };
-
       vSliderWrap.addEventListener('mousedown', e => { vDragging = true; setFromY(e.clientY); e.preventDefault(); });
       window.addEventListener('mousemove', e => { if (vDragging) setFromY(e.clientY); });
       window.addEventListener('mouseup',   () => { vDragging = false; });
       vSliderWrap.addEventListener('touchstart', e => { vDragging = true; setFromY(e.touches[0].clientY); }, { passive: true });
       vSliderWrap.addEventListener('touchmove',  e => { if (vDragging) { e.stopPropagation(); setFromY(e.touches[0].clientY); } }, { passive: false });
       vSliderWrap.addEventListener('touchend',   () => { vDragging = false; });
-    } else {
-      // No brightness — hide the slider column
-      vSliderWrap.style.display = 'none';
+
+      centreArea.appendChild(vSliderWrap);
     }
 
-    // ── Header ────────────────────────────────────────────────────────────
-    const headerRow = document.createElement('div');
-    headerRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;';
-    headerRow.innerHTML = `
-      <span style="font-size:13px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:rgba(255,255,255,0.4);">${name}</span>
-      <button class="lima-close-btn" style="background:rgba(255,255,255,0.1);border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.65);font-size:16px;line-height:1;padding:0;transition:background 0.15s;flex-shrink:0;">✕</button>`;
-    headerRow.querySelector('.lima-close-btn').addEventListener('click', closeLightPopup);
+    centreArea.appendChild(bulbWrap);
 
-    // ── Colour circle (RGB lights only) ───────────────────────────────────
+    // Brightness label under bulb
+    const briLabel = document.createElement('div');
+    briLabel.style.cssText = `font-size:13px;font-weight:500;color:rgba(255,255,255,0.4);`;
+    briLabel.textContent = supportsBri ? `${getBri()}% brightness` : (getIsOn() ? 'On' : 'Off');
+    centreArea.appendChild(briLabel);
+
+    // ── Toggle button (HomeKit-style pill) ────────────────────────────────
+    const toggleBtn = document.createElement('button');
+    const refreshToggle = () => {
+      const isOn = getIsOn();
+      const sliderCol = getSliderColor();
+      toggleBtn.style.cssText = `width:100%;background:${isOn ? sliderCol : 'rgba(255,255,255,0.1)'};color:${isOn ? '#000' : 'rgba(255,255,255,0.75)'};border:none;border-radius:16px;padding:15px;font-size:16px;font-weight:600;cursor:pointer;transition:background 0.25s,color 0.25s,transform 0.1s;font-family:inherit;letter-spacing:-0.2px;margin-bottom:16px;`;
+      toggleBtn.textContent = isOn ? 'Turn Off' : 'Turn On';
+      if (supportsBri) briLabel.textContent = `${getBri()}% brightness`;
+      else briLabel.textContent = isOn ? 'On' : 'Off';
+    };
+    refreshToggle();
+    toggleBtn.addEventListener('mouseenter', () => { toggleBtn.style.transform = 'scale(1.01)'; });
+    toggleBtn.addEventListener('mouseleave', () => { toggleBtn.style.transform = ''; });
+    toggleBtn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const wasOn = getIsOn();
+      this._callService('light', wasOn ? 'turn_off' : 'turn_on', { entity_id: entityId });
+      const willBeOn = !wasOn;
+      toggleBtn.style.cssText = `width:100%;background:${willBeOn ? accent : 'rgba(255,255,255,0.1)'};color:${willBeOn ? '#000' : 'rgba(255,255,255,0.75)'};border:none;border-radius:16px;padding:15px;font-size:16px;font-weight:600;cursor:pointer;transition:background 0.25s,color 0.25s,transform 0.1s;font-family:inherit;letter-spacing:-0.2px;margin-bottom:16px;`;
+      toggleBtn.textContent = willBeOn ? 'Turn Off' : 'Turn On';
+      briLabel.textContent = supportsBri ? `${getBri()}% brightness` : (willBeOn ? 'On' : 'Off');
+    });
+
+    // ── Info list (grouped card, HomeKit-style) ───────────────────────────
+    const makeRow = (label, valueText, isAccent, tappable, onClick) => {
+      const row = document.createElement('div');
+      row.className = `lima-hk-row${tappable ? ' tappable' : ''}`;
+      const lbl = document.createElement('span');
+      lbl.className = 'lima-hk-row-label';
+      lbl.textContent = label;
+      const val = document.createElement('span');
+      val.className = `lima-hk-row-value${isAccent ? ' accent' : ''}`;
+      val.innerHTML = valueText + (tappable ? ' <span class="lima-hk-chevron">›</span>' : '');
+      row.appendChild(lbl);
+      row.appendChild(val);
+      if (tappable && onClick) row.addEventListener('click', ev => { ev.stopPropagation(); onClick(); });
+      return { row, val };
+    };
+
+    // Colour circle (RGB lights only)
     let colourCircleEl = null;
     const updateColourCircle = () => {
       if (!colourCircleEl) return;
@@ -817,154 +893,104 @@ class LimaLightsCard extends HTMLElement {
       const isOn = getIsOn();
       colourCircleEl.style.background = (rgb && isOn)
         ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`
-        : isOn ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.12)';
+        : isOn ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.2)';
     };
 
-    const colourRowWrap = document.createElement('div');
+    const listCard = document.createElement('div');
+    listCard.style.cssText = `background:rgba(255,255,255,0.06);border-radius:18px;overflow:hidden;margin-bottom:12px;`;
+
+    // Separator helper
+    const addSep = () => {
+      const sep = document.createElement('div');
+      sep.style.cssText = 'height:1px;background:rgba(255,255,255,0.07);margin:0 14px;';
+      listCard.appendChild(sep);
+    };
+
+    let rowCount = 0;
+
+    // Colour row
     if (supportsRgb) {
-      colourRowWrap.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:4px 0 12px;';
-      const colourLabelEl = document.createElement('div');
-      colourLabelEl.style.cssText = 'font-size:12px;font-weight:600;color:rgba(255,255,255,0.45);letter-spacing:0.04em;text-transform:uppercase;';
-      colourLabelEl.textContent = 'Colour';
+      const colRow = document.createElement('div');
+      colRow.className = 'lima-hk-row tappable';
+      const colLbl = document.createElement('span');
+      colLbl.className = 'lima-hk-row-label';
+      colLbl.textContent = 'Colour';
+      const colRight = document.createElement('div');
+      colRight.style.cssText = 'display:flex;align-items:center;gap:8px;';
       colourCircleEl = document.createElement('div');
-      colourCircleEl.style.cssText = 'width:36px;height:36px;border-radius:50%;cursor:pointer;border:2px solid rgba(255,255,255,0.2);transition:transform 0.15s ease,box-shadow 0.15s ease;flex-shrink:0;';
+      colourCircleEl.style.cssText = 'width:22px;height:22px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.15);transition:transform 0.15s;flex-shrink:0;';
       updateColourCircle();
-      colourCircleEl.addEventListener('mouseenter', () => { colourCircleEl.style.transform = 'scale(1.08)'; colourCircleEl.style.boxShadow = '0 0 0 3px rgba(255,255,255,0.15)'; });
-      colourCircleEl.addEventListener('mouseleave', () => { colourCircleEl.style.transform = ''; colourCircleEl.style.boxShadow = ''; });
-      colourCircleEl.addEventListener('click', ev => {
+      const chevron = document.createElement('span');
+      chevron.className = 'lima-hk-chevron';
+      chevron.textContent = '›';
+      colRight.appendChild(colourCircleEl);
+      colRight.appendChild(chevron);
+      colRow.appendChild(colLbl);
+      colRow.appendChild(colRight);
+      colRow.addEventListener('click', ev => {
         ev.stopPropagation();
         this._openColourPicker(entityId, accent, popupBg, textCol, colourCircleEl, updateColourCircle);
       });
-      colourRowWrap.appendChild(colourLabelEl);
-      colourRowWrap.appendChild(colourCircleEl);
+      if (rowCount > 0) addSep();
+      listCard.appendChild(colRow);
+      rowCount++;
     }
-
-    // ── Info rows ─────────────────────────────────────────────────────────
-    const infoWrap = document.createElement('div');
-    infoWrap.style.cssText = 'flex:1;';
 
     // Last changed row
-    const lastRow = document.createElement('div');
-    lastRow.className = 'lima-info-row clickable';
-    const lastLabelEl = document.createElement('span');
-    lastLabelEl.className = 'lima-info-label';
-    lastLabelEl.textContent = 'Last changed';
-    const lastValueEl = document.createElement('span');
-    lastValueEl.className = 'lima-info-value';
-    lastValueEl.style.color = accent;
-
-    const refreshLastChanged = () => {
+    const refreshLastChanged = () => lastValEl.innerHTML = (() => {
       const so = this._hass?.states[entityId];
       const lc = so?.last_changed || so?.last_updated;
-      if (lc) {
-        const mins = Math.floor((Date.now() - new Date(lc).getTime()) / 60000);
-        lastValueEl.textContent = (mins < 1 ? 'Just now' : mins < 60 ? `${mins} min ago` : `${Math.floor(mins/60)}h ago`) + ' ›';
-      } else {
-        lastValueEl.textContent = '— ›';
-      }
-    };
-    refreshLastChanged();
-    lastRow.appendChild(lastLabelEl);
-    lastRow.appendChild(lastValueEl);
-    lastRow.addEventListener('click', ev => {
-      ev.stopPropagation();
-      this._openHistoryPopup(entityId, name, accent, popupBg, textCol);
-    });
-    infoWrap.appendChild(lastRow);
+      if (!lc) return '—';
+      const mins = Math.floor((Date.now() - new Date(lc).getTime()) / 60000);
+      return mins < 1 ? 'Just now' : mins < 60 ? `${mins}m ago` : `${Math.floor(mins/60)}h ago`;
+    })() + ' <span class="lima-hk-chevron">›</span>';
 
-    // Effects row
+    const { row: lastRow, val: lastValEl } = makeRow('Last changed', '', true, false, null);
+    lastRow.classList.add('tappable');
+    refreshLastChanged();
+    lastRow.addEventListener('click', ev => { ev.stopPropagation(); this._openHistoryPopup(entityId, name, accent, popupBg, textCol); });
+    if (rowCount > 0) addSep();
+    listCard.appendChild(lastRow);
+    rowCount++;
+
+    // Effect row
     const effectList = getEffects();
-    let effectRowValueEl = null;
+    let effectValEl = null;
     if (effectList.length) {
-      const effectRow = document.createElement('div');
-      effectRow.className = 'lima-info-row clickable';
-      const effectLabelEl = document.createElement('span');
-      effectLabelEl.className = 'lima-info-label';
-      effectLabelEl.textContent = 'Effect';
-      effectRowValueEl = document.createElement('span');
-      effectRowValueEl.className = 'lima-info-value';
-      effectRowValueEl.style.cssText = `color:${accent};text-transform:uppercase;letter-spacing:0.04em;font-size:12px;`;
-      effectRowValueEl.textContent = getEffect() ? `${getEffect()} ›` : 'None ›';
-      effectRow.appendChild(effectLabelEl);
-      effectRow.appendChild(effectRowValueEl);
-      effectRow.addEventListener('click', ev => {
-        ev.stopPropagation();
+      const { row: effectRow, val: effVal } = makeRow('Effect', getEffect() ? getEffect().toUpperCase() : 'NONE', true, true, () => {
         this._openEffectPicker(entityId, effectList, getEffect(), accent, popupBg, textCol, (selected) => {
-          if (effectRowValueEl) effectRowValueEl.textContent = (selected && selected !== 'none') ? `${selected} ›` : 'None ›';
+          if (effectValEl) effectValEl.innerHTML = ((selected && selected !== 'none') ? selected.toUpperCase() : 'NONE') + ' <span class="lima-hk-chevron">›</span>';
         });
       });
-      infoWrap.appendChild(effectRow);
+      effectValEl = effVal;
+      addSep();
+      listCard.appendChild(effectRow);
     }
-
-    // Note for basic lights
-    if (!supportsRgb && !supportsCT && !effectList.length) {
-      const noteEl = document.createElement('div');
-      noteEl.style.cssText = `margin-top:12px;padding:12px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:14px;display:flex;align-items:flex-start;gap:10px;`;
-      noteEl.innerHTML = `
-        <div style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="rgba(255,255,255,0.4)"><path d="M13 9h-2V7h2m0 10h-2v-6h2m-1-9A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2z"/></svg>
-        </div>
-        <div>
-          <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.6);margin-bottom:2px;">Basic light only</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.35);line-height:1.5;">No colour or effects supported.</div>
-        </div>`;
-      infoWrap.appendChild(noteEl);
-    }
-
-    // ── Toggle button ─────────────────────────────────────────────────────
-    const toggleBtn = document.createElement('button');
-    const refreshToggle = () => {
-      const isOn = getIsOn();
-      toggleBtn.style.cssText = `width:100%;background:${isOn ? accent : 'rgba(255,255,255,0.12)'};color:${isOn ? '#000' : 'rgba(255,255,255,0.8)'};border:none;border-radius:14px;padding:13px 24px;font-size:15px;font-weight:700;cursor:pointer;transition:background 0.2s,color 0.2s;font-family:inherit;margin-top:16px;`;
-      toggleBtn.textContent = isOn ? 'Turn Off' : 'Turn On';
-    };
-    refreshToggle();
-    toggleBtn.addEventListener('click', ev => {
-      ev.stopPropagation();
-      const wasOn = getIsOn();
-      this._callService('light', wasOn ? 'turn_off' : 'turn_on', { entity_id: entityId });
-      const willBeOn = !wasOn;
-      toggleBtn.style.cssText = `width:100%;background:${willBeOn ? accent : 'rgba(255,255,255,0.12)'};color:${willBeOn ? '#000' : 'rgba(255,255,255,0.8)'};border:none;border-radius:14px;padding:13px 24px;font-size:15px;font-weight:700;cursor:pointer;transition:background 0.2s,color 0.2s;font-family:inherit;margin-top:16px;`;
-      toggleBtn.textContent = willBeOn ? 'Turn Off' : 'Turn On';
-    });
-
-    // ── Right column: header + colour + info + toggle ─────────────────────
-    const rightCol = document.createElement('div');
-    rightCol.style.cssText = 'flex:1;display:flex;flex-direction:column;min-width:0;';
-    rightCol.appendChild(headerRow);
-    if (supportsRgb) rightCol.appendChild(colourRowWrap);
-    rightCol.appendChild(infoWrap);
-    rightCol.appendChild(toggleBtn);
-
-    // ── Two-column body ───────────────────────────────────────────────────
-    const bodyRow = document.createElement('div');
-    bodyRow.style.cssText = 'display:flex;gap:14px;align-items:stretch;';
-    if (supportsBri) {
-      // Size the slider to match the right column height dynamically
-      vSliderWrap.style.cssText += 'min-height:200px;';
-      bodyRow.appendChild(vSliderWrap);
-    }
-    bodyRow.appendChild(rightCol);
 
     // ── Live refresh ──────────────────────────────────────────────────────
     this._refreshLightPopup = () => {
       refreshToggle();
       updateColourCircle();
+      updateBulb();
       refreshLastChanged();
       if (supportsBri && hkFill && vPctSpan) {
         const bri = getBri();
         hkFill.style.height = `${bri}%`;
         hkFill.style.background = getSliderColor();
         vPctSpan.textContent = `${bri}%`;
+        vPctSpan.className = `lima-vslider-pct${bri < 25 ? ' dim' : ''}`;
       }
-      if (effectRowValueEl) {
+      if (effectValEl) {
         const e = getEffect();
-        effectRowValueEl.textContent = e ? `${e} ›` : 'None ›';
+        effectValEl.innerHTML = (e ? e.toUpperCase() : 'NONE') + ' <span class="lima-hk-chevron">›</span>';
       }
     };
 
     popup.appendChild(style);
-    popup.appendChild(bodyRow);
+    popup.appendChild(headerRow);
+    popup.appendChild(centreArea);
+    popup.appendChild(toggleBtn);
+    popup.appendChild(listCard);
 
     lightOverlay.appendChild(popup);
     lightOverlay.addEventListener('click', e => { if (e.target === lightOverlay) closeLightPopup(); });
