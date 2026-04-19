@@ -491,9 +491,8 @@ class LimaLightsCard extends HTMLElement {
         }
       };
 
-      let touchStartY       = 0;
-      let touchMoved        = false;
-      let suppressNextClick = false;
+      let touchStartY  = 0;
+      let touchMoved   = false;
 
       pill.addEventListener('mousedown',  () => startPress());
       pill.addEventListener('mouseleave', () => cancelPress());
@@ -514,27 +513,23 @@ class LimaLightsCard extends HTMLElement {
 
       pill.addEventListener('touchend', (e) => {
         cancelPress();
-        // Always suppress the synthetic click the browser fires after touchend.
-        // Without this flag, the click can land on a *different* pill if the
-        // popup scrolled between touchstart and touchend, toggling the wrong light.
-        suppressNextClick = true;
-        setTimeout(() => { suppressNextClick = false; }, 600);
         if (!touchMoved) {
-          e.preventDefault();
+          e.preventDefault(); // suppress synthetic click so it doesn't land on a scrolled pill
           doToggle();
         }
       }, { passive: false });
 
-      pill.addEventListener('touchcancel', () => {
-        cancelPress();
-        touchMoved        = false;
-        suppressNextClick = true;
-        setTimeout(() => { suppressNextClick = false; }, 600);
-      }, { passive: true });
+      pill.addEventListener('touchcancel', () => { cancelPress(); touchMoved = false; }, { passive: true });
 
-      // click handles desktop mouse only — touch is fully handled by touchend above.
+      // click handles desktop mouse only (touch is handled above)
       pill.addEventListener('click', ev => {
-        if (suppressNextClick) { ev.stopPropagation(); return; }
+        ev.stopPropagation();
+        doToggle();
+      });
+
+      // click fires on desktop mouse; on mobile the synthetic click is suppressed
+      // by preventDefault() in touchstart so doToggle() is a no-op guard here.
+      pill.addEventListener('click', ev => {
         ev.stopPropagation();
         doToggle();
       });
@@ -963,7 +958,8 @@ class LimaLightsCard extends HTMLElement {
       effectRowValueEl = document.createElement('span');
       effectRowValueEl.className = 'lima-info-value';
       effectRowValueEl.style.color = accent;
-      effectRowValueEl.textContent = getEffect() ? `${getEffect()} ›` : 'None ›';
+      const fmtEffect = e => e ? e.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'None';
+      effectRowValueEl.textContent = `${fmtEffect(getEffect())} ›`;
 
       effectRow.appendChild(effectLabelEl);
       effectRow.appendChild(effectRowValueEl);
@@ -973,7 +969,7 @@ class LimaLightsCard extends HTMLElement {
         ev.stopPropagation();
         this._openEffectPicker(entityId, effectList, getEffect(), accent, popupBg, textCol, (selected) => {
           if (effectRowValueEl) {
-            effectRowValueEl.textContent = (selected && selected !== 'none') ? `${selected} ›` : 'None ›';
+            effectRowValueEl.textContent = `${fmtEffect(selected && selected !== 'none' ? selected : null)} ›`;
           }
         });
       });
@@ -1014,8 +1010,7 @@ class LimaLightsCard extends HTMLElement {
         ctValueEl.textContent = (getCT() < 3000 ? `${getCT()}K · Warm` : getCT() > 5000 ? `${getCT()}K · Cool` : `${getCT()}K`);
       }
       if (effectRowValueEl) {
-        const e = getEffect();
-        effectRowValueEl.textContent = e ? `${e} ›` : 'None ›';
+        effectRowValueEl.textContent = `${fmtEffect(getEffect())} ›`;
       }
     };
 
@@ -1027,6 +1022,7 @@ class LimaLightsCard extends HTMLElement {
 
     lightOverlay.appendChild(popup);
     lightOverlay.addEventListener('click', e => { if (e.target === lightOverlay) closeLightPopup(); });
+    lightOverlay.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
     document.body.appendChild(lightOverlay);
     this._lightPopup = lightOverlay;
   }
