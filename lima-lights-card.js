@@ -521,14 +521,9 @@ class LimaLightsCard extends HTMLElement {
 
       pill.addEventListener('touchcancel', () => { cancelPress(); touchMoved = false; }, { passive: true });
 
-      // click handles desktop mouse only (touch is handled above)
-      pill.addEventListener('click', ev => {
-        ev.stopPropagation();
-        doToggle();
-      });
-
-      // click fires on desktop mouse; on mobile the synthetic click is suppressed
-      // by preventDefault() in touchstart so doToggle() is a no-op guard here.
+      // click handles desktop mouse only (touch is handled above via touchend).
+      // On mobile the synthetic click is suppressed by preventDefault() in touchend
+      // so this listener is effectively a no-op for touch devices.
       pill.addEventListener('click', ev => {
         ev.stopPropagation();
         doToggle();
