@@ -338,6 +338,11 @@ class LimaLightsCard extends HTMLElement {
     const overlay = document.createElement('div');
     overlay.style.cssText = `position:fixed;inset:0;z-index:9999;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:rgba(0,0,0,0.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);`;
 
+    // Block all touch scroll on the overlay (prevents page scrolling behind).
+    // The popup re-enables scrolling for its own content via a non-passive touchmove
+    // that calls preventDefault only when the touch originated outside the popup.
+    overlay.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+
     const style = document.createElement('style');
     style.textContent = `
       @keyframes limaFadeIn  { from{opacity:0} to{opacity:1} }
@@ -366,20 +371,9 @@ class LimaLightsCard extends HTMLElement {
     popup.className = 'lima-popup';
     popup.style.cssText = `background:${popupBg};backdrop-filter:blur(40px) saturate(180%);-webkit-backdrop-filter:blur(40px) saturate(180%);border:1px solid rgba(255,255,255,0.13);border-radius:28px;box-shadow:0 28px 72px rgba(0,0,0,0.65);padding:20px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto;color:${textCol};font-family:${this._haFont()};-webkit-overflow-scrolling:touch;`;
 
-    // Allow the popup to scroll internally while preventing the page behind from scrolling.
-    // We track touch start Y and only call preventDefault when the popup can still scroll
-    // in the direction of movement — otherwise the event passes through naturally.
-    let _overviewTouchStartY = 0;
-    popup.addEventListener('touchstart', e => { _overviewTouchStartY = e.touches[0].clientY; }, { passive: true });
-    popup.addEventListener('touchmove', e => {
-      const dy        = e.touches[0].clientY - _overviewTouchStartY;
-      const atTop     = popup.scrollTop <= 0;
-      const atBottom  = popup.scrollTop + popup.clientHeight >= popup.scrollHeight - 1;
-      // Block page scroll only when the popup can absorb the movement
-      if (!(atTop && dy > 0) && !(atBottom && dy < 0)) {
-        e.stopPropagation();
-      }
-    }, { passive: true });
+    // Stop touchmove from reaching the overlay's preventDefault handler above,
+    // so the popup's native overflow scroll can work freely.
+    popup.addEventListener('touchmove', e => e.stopPropagation(), { passive: true });
 
     // Header
     const headerRow = document.createElement('div');
