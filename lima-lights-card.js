@@ -336,12 +336,7 @@ class LimaLightsCard extends HTMLElement {
     const onCol   = cfg.on_color     || '#FFD60A';
 
     const overlay = document.createElement('div');
-    overlay.style.cssText = `position:fixed;inset:0;z-index:9999;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:rgba(0,0,0,0.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);`;
-
-    // Block all touch scroll on the overlay (prevents page scrolling behind).
-    // The popup re-enables scrolling for its own content via a non-passive touchmove
-    // that calls preventDefault only when the touch originated outside the popup.
-    overlay.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+    overlay.style.cssText = `position:fixed;inset:0;z-index:9999;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:rgba(0,0,0,0.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);overflow-y:auto;-webkit-overflow-scrolling:touch;`;
 
     const style = document.createElement('style');
     style.textContent = `
@@ -356,7 +351,7 @@ class LimaLightsCard extends HTMLElement {
         transition: transform 0.15s ease, background 0.15s ease, border-color 0.2s, opacity 0.2s;
         min-width: 0; flex: 1; gap: 6px; position: relative;
         user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
-        touch-action: none;
+        touch-action: pan-y;
         font-family: var(--primary-font-family, inherit);
       }
       .lima-light-pill.is-on  { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.3); }
@@ -369,11 +364,7 @@ class LimaLightsCard extends HTMLElement {
 
     const popup = document.createElement('div');
     popup.className = 'lima-popup';
-    popup.style.cssText = `background:${popupBg};backdrop-filter:blur(40px) saturate(180%);-webkit-backdrop-filter:blur(40px) saturate(180%);border:1px solid rgba(255,255,255,0.13);border-radius:28px;box-shadow:0 28px 72px rgba(0,0,0,0.65);padding:20px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto;color:${textCol};font-family:${this._haFont()};-webkit-overflow-scrolling:touch;`;
-
-    // Stop touchmove from reaching the overlay's preventDefault handler above,
-    // so the popup's native overflow scroll can work freely.
-    popup.addEventListener('touchmove', e => e.stopPropagation(), { passive: true });
+    popup.style.cssText = `background:${popupBg};backdrop-filter:blur(40px) saturate(180%);-webkit-backdrop-filter:blur(40px) saturate(180%);border:1px solid rgba(255,255,255,0.13);border-radius:28px;box-shadow:0 28px 72px rgba(0,0,0,0.65);padding:20px;width:100%;max-width:420px;color:${textCol};font-family:${this._haFont()};`;
 
     // Header
     const headerRow = document.createElement('div');
