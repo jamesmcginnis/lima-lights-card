@@ -490,18 +490,45 @@ class LimaLightsCard extends HTMLElement {
         }
       };
 
-      let touchStartY = 0;
+      let touchStartY  = 0;
+      let touchMoved   = false;
+      let touchHandled = false;
 
       pill.addEventListener('mousedown',  () => startPress());
       pill.addEventListener('mouseleave', () => cancelPress());
       pill.addEventListener('mouseup',    () => cancelPress());
-      pill.addEventListener('touchstart', (e) => { e.preventDefault(); touchStartY = e.touches[0].clientY; startPress(); }, { passive: false });
-      pill.addEventListener('touchend',   (e) => {
-        cancelPress();
-        const moved = Math.abs((e.changedTouches[0]?.clientY ?? touchStartY) - touchStartY);
-        if (moved < 8) doToggle();
+
+      pill.addEventListener('touchstart', (e) => {
+        touchStartY  = e.touches[0].clientY;
+        touchMoved   = false;
+        startPress();
       }, { passive: true });
-      pill.addEventListener('touchcancel',() => cancelPress(), { passive: true });
+
+      pill.addEventListener('touchmove', (e) => {
+        if (Math.abs(e.touches[0].clientY - touchStartY) > 8) {
+          touchMoved = true;
+          cancelPress(); // also cancel any pending long-press
+        }
+      }, { passive: true });
+
+      pill.addEventListener('touchend', () => {
+        cancelPress();
+        if (!touchMoved) {
+          touchHandled = true;
+          doToggle();
+          // Clear flag after the synthetic click would have fired
+          setTimeout(() => { touchHandled = false; }, 400);
+        }
+      }, { passive: true });
+
+      pill.addEventListener('touchcancel', () => { cancelPress(); touchMoved = false; }, { passive: true });
+
+      // click handles desktop mouse; on mobile we suppress it if touch already acted
+      pill.addEventListener('click', ev => {
+        ev.stopPropagation();
+        if (touchHandled) { touchHandled = false; return; }
+        doToggle();
+      });
 
       // click fires on desktop mouse; on mobile the synthetic click is suppressed
       // by preventDefault() in touchstart so doToggle() is a no-op guard here.
