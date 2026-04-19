@@ -493,7 +493,6 @@ class LimaLightsCard extends HTMLElement {
 
       let touchStartY  = 0;
       let touchMoved   = false;
-      let touchHandled = false;
 
       pill.addEventListener('mousedown',  () => startPress());
       pill.addEventListener('mouseleave', () => cancelPress());
@@ -508,26 +507,23 @@ class LimaLightsCard extends HTMLElement {
       pill.addEventListener('touchmove', (e) => {
         if (Math.abs(e.touches[0].clientY - touchStartY) > 8) {
           touchMoved = true;
-          cancelPress(); // also cancel any pending long-press
+          cancelPress();
         }
       }, { passive: true });
 
-      pill.addEventListener('touchend', () => {
+      pill.addEventListener('touchend', (e) => {
         cancelPress();
         if (!touchMoved) {
-          touchHandled = true;
+          e.preventDefault(); // suppress synthetic click so it doesn't land on a scrolled pill
           doToggle();
-          // Clear flag after the synthetic click would have fired
-          setTimeout(() => { touchHandled = false; }, 400);
         }
-      }, { passive: true });
+      }, { passive: false });
 
       pill.addEventListener('touchcancel', () => { cancelPress(); touchMoved = false; }, { passive: true });
 
-      // click handles desktop mouse; on mobile we suppress it if touch already acted
+      // click handles desktop mouse only (touch is handled above)
       pill.addEventListener('click', ev => {
         ev.stopPropagation();
-        if (touchHandled) { touchHandled = false; return; }
         doToggle();
       });
 
