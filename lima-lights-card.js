@@ -239,6 +239,20 @@ class LimaLightsCard extends HTMLElement {
     if (fillEl) {
       fillEl.style.width        = `${Math.round((onCount / total) * 100)}%`;
       fillEl.style.borderRadius = onCount === total ? '28px' : '28px 0 0 28px';
+
+      // Use the average RGB of all lights that are currently on, falling back to cfg fill colour
+      const onEntities = entities.filter(e => this._isOn(e));
+      const rgbValues  = onEntities
+        .map(e => this._hass?.states[e]?.attributes?.rgb_color)
+        .filter(Boolean);
+
+      if (rgbValues.length) {
+        const avg = rgbValues.reduce((acc, rgb) => [acc[0]+rgb[0], acc[1]+rgb[1], acc[2]+rgb[2]], [0,0,0])
+          .map(v => Math.round(v / rgbValues.length));
+        fillEl.style.background = `rgba(${avg[0]},${avg[1]},${avg[2]},0.35)`;
+      } else {
+        fillEl.style.background = `rgba(${this._hexToRgb(cfg.fill_color || cfg.accent_color || '#FFD60A')}, 0.22)`;
+      }
     }
   }
 
@@ -718,10 +732,7 @@ class LimaLightsCard extends HTMLElement {
       }
       .lima-hk-slider-name { font-size: 13px; font-weight: 600; color: rgba(0,0,0,0.6); }
       .lima-hk-slider-value { font-size: 13px; font-weight: 700; color: rgba(0,0,0,0.7); }
-      /* CT slider */
-      .lima-ct-slider { -webkit-appearance:none;appearance:none;width:100%;height:32px;border-radius:10px;outline:none;cursor:pointer;background:linear-gradient(to right,#FF9A3C,#FFE566,#fff,#d4eeff); }
-      .lima-ct-slider::-webkit-slider-thumb { -webkit-appearance:none;appearance:none;width:26px;height:26px;border-radius:50%;background:#fff;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.4);border:2px solid rgba(255,255,255,0.9); }
-      .lima-ct-slider::-moz-range-thumb { width:26px;height:26px;border-radius:50%;background:#fff;cursor:pointer;border:2px solid rgba(255,255,255,0.9);box-shadow:0 2px 8px rgba(0,0,0,0.4); }
+
       /* Effects sheet */
       .lima-effect-btn { width:100%;text-align:left;padding:11px 14px;background:rgba(255,255,255,0.06);border:none;border-radius:10px;color:rgba(255,255,255,0.85);font-size:14px;cursor:pointer;transition:background 0.15s;font-family:inherit;margin-bottom:6px; }
       .lima-effect-btn:hover { background:rgba(255,255,255,0.12); }
@@ -736,15 +747,11 @@ class LimaLightsCard extends HTMLElement {
     const getState    = () => this._hass?.states[entityId];
     const getIsOn     = () => getState()?.state === 'on';
     const getBri      = () => { const b = getState()?.attributes?.brightness; return b !== undefined ? Math.round(b / 2.55) : 100; };
-    const getCT       = () => getState()?.attributes?.color_temp_kelvin ?? this._minColorTemp(entityId);
     const getEffect   = () => getState()?.attributes?.effect ?? null;
     const getEffects  = () => getState()?.attributes?.effect_list ?? [];
     const supportsBri = this._supportsBrightness(entityId);
-    const supportsCT  = this._supportsColorTemp(entityId);
     const supportsRgb = this._supportsRgb(entityId);
     const getRgb      = () => this._getRgbColor(entityId);
-    const minCT       = this._minColorTemp(entityId);
-    const maxCT       = this._maxColorTemp(entityId);
 
     // Header
     const headerRow = document.createElement('div');
@@ -756,7 +763,7 @@ class LimaLightsCard extends HTMLElement {
 
     // On/Off toggle row — full-width button only
     const toggleWrap = document.createElement('div');
-    toggleWrap.style.cssText = 'margin-bottom:20px;';
+    toggleWrap.style.cssText = 'margin-top:20px;';
 
     const toggleBtn = document.createElement('button');
 
@@ -824,7 +831,13 @@ class LimaLightsCard extends HTMLElement {
       briLabelEl.style.cssText = 'font-size:12px;font-weight:600;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.06em;';
       briLabelEl.textContent = 'Brightness';
       briValueEl = document.createElement('div');
-      briValueEl.style.cssText = `font-size:13px;font-weight:700;color:${accent};`;
+
+      const getSliderColour = () => {
+        const rgb = getRgb();
+        return (rgb && getIsOn()) ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : accent;
+      };
+
+      briValueEl.style.cssText = `font-size:13px;font-weight:700;color:${getSliderColour()};`;
       briValueEl.textContent = `${getBri()}%`;
       briHeader.appendChild(briLabelEl);
       briHeader.appendChild(briValueEl);
@@ -835,7 +848,7 @@ class LimaLightsCard extends HTMLElement {
 
       hkFill = document.createElement('div');
       hkFill.className = 'lima-hk-slider-fill';
-      hkFill.style.cssText = `background:${accent};width:${getBri()}%;`;
+      hkFill.style.cssText = `background:${getSliderColour()};width:${getBri()}%;`;
 
       const hkLabelDiv = document.createElement('div');
       hkLabelDiv.className = 'lima-hk-slider-label';
@@ -873,43 +886,6 @@ class LimaLightsCard extends HTMLElement {
       controlsWrap.appendChild(briSection);
     }
 
-    // ── Colour temperature slider ─────────────────────────────────────────
-    let ctValueEl, ctSlider;
-    if (supportsCT) {
-      const ctSection = document.createElement('div');
-
-      const ctHeader = document.createElement('div');
-      ctHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;';
-      const ctLabelEl = document.createElement('div');
-      ctLabelEl.style.cssText = 'font-size:12px;font-weight:600;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.06em;';
-      ctLabelEl.textContent = 'Colour Temperature';
-      ctValueEl = document.createElement('div');
-      ctValueEl.style.cssText = `font-size:13px;font-weight:700;color:${accent};`;
-      const kelvinToLabel = k => k < 3000 ? `${k}K · Warm` : k > 5000 ? `${k}K · Cool` : `${k}K`;
-      ctValueEl.textContent = kelvinToLabel(getCT());
-      ctHeader.appendChild(ctLabelEl);
-      ctHeader.appendChild(ctValueEl);
-
-      ctSlider = document.createElement('input');
-      ctSlider.type  = 'range';
-      ctSlider.min   = String(minCT);
-      ctSlider.max   = String(maxCT);
-      ctSlider.value = String(getCT());
-      ctSlider.className = 'lima-ct-slider';
-
-      let ctTimer = null;
-      ctSlider.addEventListener('input', () => {
-        ctValueEl.textContent = kelvinToLabel(parseInt(ctSlider.value));
-        clearTimeout(ctTimer);
-        ctTimer = setTimeout(() => {
-          this._callService('light', 'turn_on', { entity_id: entityId, color_temp_kelvin: parseInt(ctSlider.value) });
-        }, 150);
-      });
-
-      ctSection.appendChild(ctHeader);
-      ctSection.appendChild(ctSlider);
-      controlsWrap.appendChild(ctSection);
-    }
 
     // ── Info rows ─────────────────────────────────────────────────────────
     const infoWrap = document.createElement('div');
@@ -958,8 +934,7 @@ class LimaLightsCard extends HTMLElement {
       effectRowValueEl = document.createElement('span');
       effectRowValueEl.className = 'lima-info-value';
       effectRowValueEl.style.color = accent;
-      const fmtEffect = e => e ? e.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'None';
-      effectRowValueEl.textContent = `${fmtEffect(getEffect())} ›`;
+      effectRowValueEl.textContent = getEffect() ? `${getEffect()} ›` : 'None ›';
 
       effectRow.appendChild(effectLabelEl);
       effectRow.appendChild(effectRowValueEl);
@@ -969,7 +944,7 @@ class LimaLightsCard extends HTMLElement {
         ev.stopPropagation();
         this._openEffectPicker(entityId, effectList, getEffect(), accent, popupBg, textCol, (selected) => {
           if (effectRowValueEl) {
-            effectRowValueEl.textContent = `${fmtEffect(selected && selected !== 'none' ? selected : null)} ›`;
+            effectRowValueEl.textContent = (selected && selected !== 'none') ? `${selected} ›` : 'None ›';
           }
         });
       });
@@ -978,7 +953,7 @@ class LimaLightsCard extends HTMLElement {
     }
 
     // Friendly note for lights that support neither colour (RGB or CT) nor effects
-    if (!supportsRgb && !supportsCT && !effectList.length) {
+    if (!supportsRgb && !effectList.length) {
       const noteEl = document.createElement('div');
       noteEl.style.cssText = `margin-top:16px;padding:14px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:14px;display:flex;align-items:flex-start;gap:12px;`;
       noteEl.innerHTML = `
@@ -998,31 +973,31 @@ class LimaLightsCard extends HTMLElement {
       updateColourCircle();
       refreshLastChanged();
       if (supportsBri && hkFill && briValueEl) {
-        const bri = getBri();
-        hkFill.style.width = `${bri}%`;
-        briValueEl.textContent = `${bri}%`;
-        // Also update the label inside the slider
+        const bri   = getBri();
+        const rgb   = getRgb();
+        const slCol = (rgb && getIsOn()) ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : accent;
+        hkFill.style.width        = `${bri}%`;
+        hkFill.style.background   = slCol;
+        briValueEl.textContent    = `${bri}%`;
+        briValueEl.style.color    = slCol;
         const hkVal = hkFill.parentElement?.querySelector('.lima-hk-slider-value');
         if (hkVal) hkVal.textContent = `${bri}%`;
       }
-      if (supportsCT && ctSlider && ctValueEl) {
-        ctSlider.value = String(getCT());
-        ctValueEl.textContent = (getCT() < 3000 ? `${getCT()}K · Warm` : getCT() > 5000 ? `${getCT()}K · Cool` : `${getCT()}K`);
-      }
+
       if (effectRowValueEl) {
-        effectRowValueEl.textContent = `${fmtEffect(getEffect())} ›`;
+        const e = getEffect();
+        effectRowValueEl.textContent = e ? `${e} ›` : 'None ›';
       }
     };
 
     popup.appendChild(style);
     popup.appendChild(headerRow);
-    popup.appendChild(toggleWrap);
-    if (supportsBri || supportsCT) popup.appendChild(controlsWrap);
+    if (supportsBri) popup.appendChild(controlsWrap);
     popup.appendChild(infoWrap);
+    popup.appendChild(toggleWrap);
 
     lightOverlay.appendChild(popup);
     lightOverlay.addEventListener('click', e => { if (e.target === lightOverlay) closeLightPopup(); });
-    lightOverlay.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
     document.body.appendChild(lightOverlay);
     this._lightPopup = lightOverlay;
   }
