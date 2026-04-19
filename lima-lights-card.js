@@ -761,6 +761,7 @@ class LimaLightsCard extends HTMLElement {
     const getState    = () => this._hass?.states[entityId];
     const getIsOn     = () => getState()?.state === 'on';
     const getBri      = () => { const b = getState()?.attributes?.brightness; return b !== undefined ? Math.round(b / 2.55) : 100; };
+    const getSliderColor = () => { const rgb = this._getRgbColor(entityId); return (rgb && getIsOn()) ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : accent; };
     const getCT       = () => getState()?.attributes?.color_temp_kelvin ?? this._minColorTemp(entityId);
     const getEffect   = () => getState()?.attributes?.effect ?? null;
     const getEffects  = () => getState()?.attributes?.effect_list ?? [];
@@ -860,7 +861,7 @@ class LimaLightsCard extends HTMLElement {
 
       hkFill = document.createElement('div');
       hkFill.className = 'lima-hk-slider-fill';
-      hkFill.style.cssText = `background:${accent};width:${getBri()}%;`;
+      hkFill.style.cssText = `background:${getSliderColor()};width:${getBri()}%;`;
 
       const hkLabelDiv = document.createElement('div');
       hkLabelDiv.className = 'lima-hk-slider-label';
@@ -944,7 +945,7 @@ class LimaLightsCard extends HTMLElement {
 
       effectRowValueEl = document.createElement('span');
       effectRowValueEl.className = 'lima-info-value';
-      effectRowValueEl.style.color = accent;
+      effectRowValueEl.style.cssText = `color:${accent};text-transform:uppercase;letter-spacing:0.04em;font-size:12px;`;
       effectRowValueEl.textContent = getEffect() ? `${getEffect()} ›` : 'None ›';
 
       effectRow.appendChild(effectLabelEl);
@@ -986,6 +987,7 @@ class LimaLightsCard extends HTMLElement {
       if (supportsBri && hkFill && briValueEl) {
         const bri = getBri();
         hkFill.style.width = `${bri}%`;
+        hkFill.style.background = getSliderColor();
         briValueEl.textContent = `${bri}%`;
         // Also update the label inside the slider
         const hkVal = hkFill.parentElement?.querySelector('.lima-hk-slider-value');
