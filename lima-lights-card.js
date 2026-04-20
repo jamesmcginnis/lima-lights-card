@@ -35,31 +35,33 @@ class LimaLightsCard extends HTMLElement {
 
   static getStubConfig() {
     return {
-      type:         'custom:lima-lights-card',
-      entities:     [],
-      title:        '',
-      accent_color: '#FFD60A',
-      fill_color:   '#FFD60A',
-      on_color:     '#FFD60A',
-      off_color:    '#48484A',
-      pill_bg:      '#1c1c1e',
-      text_color:   '#ffffff',
-      popup_bg:     '#1c1c1e',
-      icon_color:   '#FFD60A',
+      type:           'custom:lima-lights-card',
+      entities:       [],
+      title:          '',
+      group_by_area:  false,
+      accent_color:   '#FFD60A',
+      fill_color:     '#FFD60A',
+      on_color:       '#FFD60A',
+      off_color:      '#48484A',
+      pill_bg:        '#1c1c1e',
+      text_color:     '#ffffff',
+      popup_bg:       '#1c1c1e',
+      icon_color:     '#FFD60A',
     };
   }
 
   setConfig(config) {
     this._config = {
-      title:        '',
-      accent_color: '#FFD60A',
-      fill_color:   '#FFD60A',
-      on_color:     '#FFD60A',
-      off_color:    '#48484A',
-      pill_bg:      '#1c1c1e',
-      text_color:   '#ffffff',
-      popup_bg:     '#1c1c1e',
-      icon_color:   '#FFD60A',
+      title:          '',
+      group_by_area:  false,
+      accent_color:   '#FFD60A',
+      fill_color:     '#FFD60A',
+      on_color:       '#FFD60A',
+      off_color:      '#48484A',
+      pill_bg:        '#1c1c1e',
+      text_color:     '#ffffff',
+      popup_bg:       '#1c1c1e',
+      icon_color:     '#FFD60A',
       ...config
     };
     if (this.shadowRoot.innerHTML) this._render();
@@ -133,6 +135,18 @@ class LimaLightsCard extends HTMLElement {
     const s = this._hass?.states[entityId];
     if (!s) return entityId;
     return s.attributes?.friendly_name || entityId.split('.').pop().replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  _getAreaForEntity(entityId) {
+    if (!this._hass) return null;
+    const entityReg = this._hass.entities?.[entityId];
+    if (!entityReg) return null;
+    let areaId = entityReg.area_id;
+    if (!areaId && entityReg.device_id) {
+      areaId = this._hass.devices?.[entityReg.device_id]?.area_id;
+    }
+    if (!areaId) return null;
+    return this._hass.areas?.[areaId]?.name || areaId;
   }
 
   _hexToRgb(hex) {
@@ -421,31 +435,25 @@ class LimaLightsCard extends HTMLElement {
     pillsLabel.style.cssText = 'font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:rgba(255,255,255,0.3);margin-bottom:10px;';
     pillsLabel.textContent = `${entities.length} Light${entities.length !== 1 ? 's' : ''}`;
 
-    const pillsGrid = document.createElement('div');
-    pillsGrid.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;';
-
-    entities.forEach(entityId => {
+    // ── Local helper: build a single pill element ─────────────────────────
+    const buildPill = (entityId) => {
       const isOn = this._isOn(entityId);
       const name = this._name(entityId);
       const bri  = this._brightness(entityId);
       const rgb  = this._hass?.states[entityId]?.attributes?.rgb_color;
 
-      const pillColour    = (isOn && rgb) ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : onCol;
-      const iconColor     = isOn ? pillColour : 'rgba(255,255,255,0.2)';
-      const pillBg        = isOn ? `rgba(${isOn && rgb ? `${rgb[0]},${rgb[1]},${rgb[2]}` : '255,255,255'},0.12)` : 'rgba(255,255,255,0.06)';
-      const pillBorder    = isOn ? `rgba(${isOn && rgb ? `${rgb[0]},${rgb[1]},${rgb[2]}` : '255,255,255'},0.35)` : 'rgba(255,255,255,0.1)';
+      const pillColour = (isOn && rgb) ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : onCol;
+      const iconColor  = isOn ? pillColour : 'rgba(255,255,255,0.2)';
+      const pillBg     = isOn ? `rgba(${rgb ? `${rgb[0]},${rgb[1]},${rgb[2]}` : '255,255,255'},0.12)` : 'rgba(255,255,255,0.06)';
+      const pillBorder = isOn ? `rgba(${rgb ? `${rgb[0]},${rgb[1]},${rgb[2]}` : '255,255,255'},0.35)` : 'rgba(255,255,255,0.1)';
 
       const pill = document.createElement('div');
       pill.className = `lima-light-pill${isOn ? ' is-on' : ''}`;
-      if (isOn) {
-        pill.style.background   = pillBg;
-        pill.style.borderColor  = pillBorder;
-      }
+      if (isOn) { pill.style.background = pillBg; pill.style.borderColor = pillBorder; }
+
       const svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svgEl.setAttribute('width', '22');
-      svgEl.setAttribute('height', '22');
-      svgEl.setAttribute('viewBox', '0 0 24 24');
-      svgEl.setAttribute('fill', iconColor);
+      svgEl.setAttribute('width', '22'); svgEl.setAttribute('height', '22');
+      svgEl.setAttribute('viewBox', '0 0 24 24'); svgEl.setAttribute('fill', iconColor);
       svgEl.style.cssText = 'display:block;flex-shrink:0;';
       const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       pathEl.setAttribute('d', 'M12 2a7 7 0 0 1 7 7c0 2.73-1.56 5.1-3.84 6.34L14 17H10l-.16-1.66A7 7 0 0 1 5 9a7 7 0 0 1 7-7zm-2 18h4v1a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-1zm-1-2h6v1H9v-1z');
@@ -459,55 +467,86 @@ class LimaLightsCard extends HTMLElement {
       nameEl.className = 'lima-pill-name';
       nameEl.textContent = name;
 
-      pill.appendChild(svgEl);
-      pill.appendChild(briEl);
-      pill.appendChild(nameEl);
-
-      pill.dataset.entityId   = entityId;
+      pill.appendChild(svgEl); pill.appendChild(briEl); pill.appendChild(nameEl);
+      pill.dataset.entityId     = entityId;
       pill.dataset.optimisticOn = String(isOn);
       pillMap.set(entityId, { pill, svg: svgEl, briEl });
 
-      // Mouse events (desktop) — each pill gets its own timer/flag
+      // Mouse events (desktop)
       let longPressTimer = null;
       let didLongPress   = false;
-
-      pill.addEventListener('mousedown',  () => {
-        didLongPress = false;
-        pill.classList.add('pressing');
+      pill.addEventListener('mousedown', () => {
+        didLongPress = false; pill.classList.add('pressing');
         longPressTimer = setTimeout(() => {
-          didLongPress = true;
-          pill.classList.remove('pressing');
+          didLongPress = true; pill.classList.remove('pressing');
           this._openLightPopup(pill.dataset.entityId);
         }, 500);
       });
       pill.addEventListener('mouseleave', () => { clearTimeout(longPressTimer); pill.classList.remove('pressing'); });
-      pill.addEventListener('mouseup',    () => {
-        clearTimeout(longPressTimer);
-        pill.classList.remove('pressing');
+      pill.addEventListener('mouseup', () => {
+        clearTimeout(longPressTimer); pill.classList.remove('pressing');
         if (!didLongPress) {
-          const eid    = pill.dataset.entityId;
-          const wasOn  = pill.dataset.optimisticOn === 'true';
+          const eid   = pill.dataset.entityId;
+          const wasOn = pill.dataset.optimisticOn === 'true';
           const willOn = !wasOn;
           pill.dataset.optimisticOn = String(willOn);
           this._callService('light', willOn ? 'turn_on' : 'turn_off', { entity_id: eid });
           const ref = pillMap.get(eid);
           if (ref) {
-            const rgb = this._hass?.states[eid]?.attributes?.rgb_color;
-            const col = (willOn && rgb) ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : onCol;
+            const rgb2 = this._hass?.states[eid]?.attributes?.rgb_color;
+            const col  = (willOn && rgb2) ? `rgb(${rgb2[0]},${rgb2[1]},${rgb2[2]})` : onCol;
             ref.pill.classList.toggle('is-on', willOn);
-            ref.pill.style.background  = willOn ? `rgba(${rgb ? `${rgb[0]},${rgb[1]},${rgb[2]}` : '255,255,255'},0.12)` : '';
-            ref.pill.style.borderColor = willOn ? `rgba(${rgb ? `${rgb[0]},${rgb[1]},${rgb[2]}` : '255,255,255'},0.35)` : '';
+            ref.pill.style.background  = willOn ? `rgba(${rgb2 ? `${rgb2[0]},${rgb2[1]},${rgb2[2]}` : '255,255,255'},0.12)` : '';
+            ref.pill.style.borderColor = willOn ? `rgba(${rgb2 ? `${rgb2[0]},${rgb2[1]},${rgb2[2]}` : '255,255,255'},0.35)` : '';
             ref.svg.setAttribute('fill', willOn ? col : 'rgba(255,255,255,0.2)');
             ref.briEl.style.color = willOn ? col : 'rgba(255,255,255,0.25)';
             ref.briEl.textContent = willOn ? 'On' : 'Off';
           }
         }
       });
+      return pill;
+    };
 
-      pillsGrid.appendChild(pill);
-    });
+    // ── Build pills container (flat or grouped by area) ───────────────────
+    const pillsContainer = document.createElement('div');
+    pillsContainer.style.cssText = 'margin-bottom:18px;';
 
-    // ── Single delegated touch handler on the grid ────────────────────────
+    if (cfg.group_by_area) {
+      // Group entities by their HA area
+      const areaMap   = new Map(); // areaName → [entityId, ...]
+      const ungrouped = [];
+      entities.forEach(entityId => {
+        const areaName = this._getAreaForEntity(entityId);
+        if (areaName) {
+          if (!areaMap.has(areaName)) areaMap.set(areaName, []);
+          areaMap.get(areaName).push(entityId);
+        } else {
+          ungrouped.push(entityId);
+        }
+      });
+      const sortedAreas = [...areaMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+      if (ungrouped.length) sortedAreas.push(['No Area', ungrouped]);
+
+      sortedAreas.forEach(([areaName, areaEntities], groupIdx) => {
+        const areaHeader = document.createElement('div');
+        areaHeader.style.cssText = `font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:rgba(255,255,255,0.3);margin-bottom:8px;${groupIdx > 0 ? 'margin-top:16px;' : ''}`;
+        areaHeader.textContent = areaName;
+        pillsContainer.appendChild(areaHeader);
+
+        const areaGrid = document.createElement('div');
+        areaGrid.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:10px;';
+        areaEntities.forEach(entityId => areaGrid.appendChild(buildPill(entityId)));
+        pillsContainer.appendChild(areaGrid);
+      });
+    } else {
+      // Original flat 3-column grid
+      const pillsGrid = document.createElement('div');
+      pillsGrid.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:10px;';
+      entities.forEach(entityId => pillsGrid.appendChild(buildPill(entityId)));
+      pillsContainer.appendChild(pillsGrid);
+    }
+
+    // ── Single delegated touch handler on the container ───────────────────
     // Uses elementFromPoint at touchstart to identify the exact pill under
     // the finger — immune to browser touch re-targeting.
     let activePill      = null;
@@ -535,7 +574,7 @@ class LimaLightsCard extends HTMLElement {
       ref.briEl.textContent = willOn ? 'On' : 'Off';
     };
 
-    pillsGrid.addEventListener('touchstart', (e) => {
+    pillsContainer.addEventListener('touchstart', (e) => {
       const touch = e.touches[0];
       // Use elementFromPoint to get the real element under the finger
       const el = document.elementFromPoint(touch.clientX, touch.clientY);
@@ -556,7 +595,7 @@ class LimaLightsCard extends HTMLElement {
       }, 500);
     }, { passive: true });
 
-    pillsGrid.addEventListener('touchmove', (e) => {
+    pillsContainer.addEventListener('touchmove', (e) => {
       if (!activePill) return;
       const currentY = e.touches[0].clientY;
       const dy = currentY - activeLastTouchY;
@@ -569,7 +608,7 @@ class LimaLightsCard extends HTMLElement {
       }
     }, { passive: true });
 
-    pillsGrid.addEventListener('touchend', (e) => {
+    pillsContainer.addEventListener('touchend', (e) => {
       e.preventDefault();
       clearTimeout(activeLongTimer);
       if (activePill) {
@@ -581,7 +620,7 @@ class LimaLightsCard extends HTMLElement {
       }
     }, { passive: false });
 
-    pillsGrid.addEventListener('touchcancel', () => {
+    pillsContainer.addEventListener('touchcancel', () => {
       clearTimeout(activeLongTimer);
       if (activePill) { activePill.classList.remove('pressing'); activePill = null; }
       activeTouchMoved = false;
@@ -692,7 +731,7 @@ class LimaLightsCard extends HTMLElement {
     popup.appendChild(headerRow);
     popup.appendChild(statsRow);
     popup.appendChild(pillsLabel);
-    popup.appendChild(pillsGrid);
+    popup.appendChild(pillsContainer);
     popup.appendChild(allBtnsRow);
 
     overlay.id = 'lima-overlay';
@@ -1235,6 +1274,9 @@ class LimaLightsCardEditor extends HTMLElement {
 
     maybeSet(root.getElementById('title'), cfg.title || '');
 
+    const groupByArea = root.getElementById('group-by-area');
+    if (groupByArea && groupByArea !== focused) groupByArea.checked = !!cfg.group_by_area;
+
     LIMA_COLOUR_FIELDS.forEach(field => {
       const card = root.querySelector(`.colour-card[data-key="${field.key}"]`);
       if (!card) return;
@@ -1350,6 +1392,16 @@ class LimaLightsCardEditor extends HTMLElement {
             </div>
             <input class="text-input" id="title" type="text" value="${cfg.title || ''}" placeholder="e.g. Lights" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
+          <div class="field-row">
+            <div>
+              <div class="field-label">Group by Area</div>
+              <div class="field-desc">Group lights by their Home Assistant area in the popup.</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="group-by-area" ${cfg.group_by_area ? 'checked' : ''}>
+              <span class="toggle-track"></span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -1383,6 +1435,10 @@ class LimaLightsCardEditor extends HTMLElement {
     const titleEl = this.shadowRoot.getElementById('title');
     titleEl.addEventListener('blur', () => this._commitConfig('title', titleEl.value.trim()));
     titleEl.addEventListener('keydown', e => { if (e.key === 'Enter') titleEl.blur(); });
+
+    // Wire group-by-area toggle
+    const groupByAreaEl = this.shadowRoot.getElementById('group-by-area');
+    groupByAreaEl.addEventListener('change', () => this._commitConfig('group_by_area', groupByAreaEl.checked));
 
     // Wire search
     const searchEl = this.shadowRoot.getElementById('entity-search');
