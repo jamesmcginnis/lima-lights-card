@@ -9,10 +9,11 @@ A compact pill card for Home Assistant that shows how many lights are on at a gl
 - **Bulb icon shortcut** — tap the bulb icon to instantly turn all lights on or off (a friendly confirmation popup appears first)
 - **Auto-detection** — automatically finds all `light` domain entities in your Home Assistant instance; no manual entity ID typing needed
 - **Light overview popup** — tap the pill to open a popup showing each light as its own pill with its current state and brightness; tap the On or Off stat pill to highlight matching lights in the grid
+- **Group by area** — optionally group lights in the overview by their Home Assistant area, with alphabetically sorted area headings and an ungrouped section for lights with no area assigned
 - **Single tap to toggle** — tap any light pill in the overview to toggle it on or off immediately; the pill updates instantly without waiting for Home Assistant to respond
 - **Long press for detail** — hold a light pill for 500 ms to open the full individual light control popup
-- **All On / All Off** — quick-action buttons to control all configured lights simultaneously
-- **Individual light control** — brightness slider, colour temperature slider, RGB colour picker (with 16 presets and a custom colour input), and an effects picker — each shown only when the light supports them
+- **All On / All Off** — quick-action buttons to control all configured lights simultaneously; affected pills flash three times before the action fires
+- **Individual light control** — vertical HomeKit-style brightness slider, colour temperature slider, RGB colour picker (with 16 presets and a custom colour input), and an effects picker — each shown only when the light supports them
 - **Colour-aware indicator** — the on/off circle in the detail popup reflects the light's current RGB colour and is tappable to open the colour picker
 - **Light history** — tap the *Last changed* row in the detail popup to view a 24-hour state timeline
 - **Basic light note** — lights that support only on/off and brightness show a friendly note explaining colour and effects are not available
