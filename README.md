@@ -23,14 +23,15 @@ A compact pill card for Home Assistant that shows how many lights are on at a gl
 ### Light Overview Popup
 - **Stats bar** — shows On and Off counts across all configured lights; tap either pill to highlight the matching lights in the grid
 - **Light pills** — each light is shown as its own tappable pill with its current state and brightness percentage; lit in your accent colour when on, dimmed when off
+- **Group by area** — enable `group_by_area` to organise lights under their Home Assistant area headings (sorted alphabetically); lights with no area assigned are grouped under *No Area*
 - **Single tap to toggle** — tap any light pill to toggle it on or off; the pill updates immediately without waiting for Home Assistant
 - **Long press for detail** — hold a light pill for 500 ms to open the full individual light control popup
-- **All On / All Off** — two quick-action buttons at the bottom to control all lights simultaneously
+- **All On / All Off** — two quick-action buttons at the bottom to control all lights simultaneously; affected light pills flash three times before the service call fires
 
 ### Individual Light Control Popup
 - **On/Off circle** — large tappable circle indicator; reflects the light's actual RGB colour when set; tap it to open the colour picker (RGB lights only)
 - **Turn On / Turn Off button** — clear action button next to the indicator; updates optimistically before Home Assistant responds
-- **BRIGHTNESS slider** — smooth HomeKit-style pill slider to set brightness from 1–100%; updates the light in real time as you drag
+- **BRIGHTNESS slider** — vertical HomeKit-style pill slider; drag up or down to set brightness from 1–100%; updates the light in real time as you drag
 - **Colour Temperature slider** — warm-to-cool gradient slider for lights that support colour temperature; spans the light's own min/max Kelvin range
 - **RGB Colour picker** — 16 colour presets plus a custom colour input; shown only for lights that support RGB, RGBW, HS or XY colour modes
 - **Effects picker** — sheet of available effects for lights that report an effect list; shows the currently active effect and lets you switch or clear it
@@ -48,6 +49,7 @@ A compact pill card for Home Assistant that shows how many lights are on at a gl
 - **Toggle to select** — tap the toggle next to any light to add or remove it
 - **Drag-to-reorder** — drag selected lights using the grip handle to set the order they appear in the popup
 - **Friendly names** — expand any selected light to set a custom display name
+- **Group by area toggle** — enable area grouping directly in the visual editor without touching YAML
 - **Colour control** — eight colour pickers: Pill Background, Text, Accent, Pill Fill, Light On, Light Off, Popup Background and Bulb Icon
 
 ---
@@ -101,6 +103,7 @@ entities:
   - light.kitchen
   - light.hallway
 title: Lights
+group_by_area: true
 accent_color: '#FFD60A'
 fill_color: '#FFD60A'
 on_color: '#FFD60A'
@@ -120,6 +123,7 @@ friendly_names:
 |--------|------|---------|-------------|
 | `entities` | list | `[]` | List of light entity IDs to display, in display order |
 | `title` | string | _(blank)_ | Label shown on the pill card. Leave blank to hide |
+| `group_by_area` | boolean | `false` | Group lights in the overview popup by their Home Assistant area |
 | `accent_color` | string | `#FFD60A` | Highlight colour for active states, sliders and controls |
 | `fill_color` | string | `#FFD60A` | Colour of the proportional fill bar when lights are on |
 | `on_color` | string | `#FFD60A` | Colour used to indicate a light is on |
@@ -158,8 +162,14 @@ Tapping the bulb icon (rather than the card body) opens a confirmation dialog. I
 ### Toggling Lights
 In the overview popup, a single tap on any light pill calls `light.turn_on` or `light.turn_off` immediately and updates the pill's visual state optimistically — no waiting for Home Assistant to respond. A 500 ms long press opens the individual light control popup instead.
 
+### All On / All Off
+These buttons call `light.turn_on` or `light.turn_off` for every entity in your configured list. Before the service call fires, the affected light pills flash three times (alternating between full opacity and dimmed with an accent outline) so you can see which lights will be affected.
+
+### Group by Area
+When `group_by_area` is enabled, lights in the overview popup are sorted into sections by their Home Assistant area. Areas are listed alphabetically; any lights that have no area assigned appear at the end under a *No Area* heading. Area assignment is read from the entity registry and device registry, so no additional configuration is needed.
+
 ### Brightness
-The brightness slider is shown for any light that supports dimming (i.e. reports a `brightness` attribute). Dragging the slider sends a `light.turn_on` service call with `brightness_pct`. Updates are debounced by 150 ms to avoid flooding the HA bus while dragging.
+The brightness slider is a vertical HomeKit-style control shown for any light that supports dimming (i.e. reports a `brightness` attribute). Drag upward to increase brightness and downward to decrease it. The current percentage is shown inside the slider and updates as you drag. Service calls are debounced by 150 ms to avoid flooding the HA bus.
 
 ### Colour Temperature
 The colour temperature slider is shown for lights that include `color_temp` in their `supported_color_modes`. The slider spans the light's own `min_color_temp_kelvin` to `max_color_temp_kelvin` and displays a warm-to-cool gradient. Values are sent as `color_temp_kelvin`.
@@ -172,9 +182,6 @@ If a light reports an `effect_list` attribute, an Effect row appears in the deta
 
 ### Light History
 The *Last changed* row in the detail popup is tappable. It opens a sheet fetching the last 24 hours of on/off state changes from the Home Assistant history API, shown most recent first with timestamps and durations.
-
-### All On / All Off
-These buttons call `light.turn_on` or `light.turn_off` for every entity in your configured list simultaneously.
 
 ---
 
@@ -191,6 +198,9 @@ The visual editor automatically discovers all entities in the `light` domain fro
 
 **No lights appear in the editor**
 - Ensure your entities are in the `light` domain (entity IDs starting with `light.`)
+
+**Lights don't appear under an area heading**
+- Check that the entity or its device is assigned to an area in **Settings → Areas, Labels & Zones**. Entities with no area are grouped under *No Area*
 
 **Brightness slider doesn't appear**
 - The slider only appears for lights that report a `brightness` attribute. Lights that only support on/off will show just the toggle button
