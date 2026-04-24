@@ -6,6 +6,30 @@
  * GitHub: https://github.com/jamesmcginnis/lima-lights-card
  */
 
+// ─── Default colour presets for the HomeKit-style colour picker ──────────────
+const LIMA_DEFAULT_PRESETS = [
+  { label: 'Candle',   rgb: [255, 147,  41] },
+  { label: 'Warm',     rgb: [255, 180, 107] },
+  { label: 'Neutral',  rgb: [255, 235, 200] },
+  { label: 'White',    rgb: [255, 255, 255] },
+  { label: 'Daylight', rgb: [220, 235, 255] },
+  { label: 'Cool',     rgb: [180, 215, 255] },
+  { label: 'Red',      rgb: [255,  50,  50] },
+  { label: 'Orange',   rgb: [255, 130,   0] },
+  { label: 'Yellow',   rgb: [255, 215,   0] },
+  { label: 'Lime',     rgb: [100, 220,   0] },
+  { label: 'Green',    rgb: [  0, 190,  80] },
+  { label: 'Teal',     rgb: [  0, 200, 180] },
+  { label: 'Cyan',     rgb: [  0, 190, 255] },
+  { label: 'Blue',     rgb: [ 50, 100, 255] },
+  { label: 'Violet',   rgb: [180,  50, 255] },
+  { label: 'Pink',     rgb: [255,  80, 160] },
+  { label: 'Rose',     rgb: [255, 100, 130] },
+  { label: 'Mint',     rgb: [ 60, 220, 170] },
+  { label: 'Sky',      rgb: [100, 180, 255] },
+  { label: 'Lavender', rgb: [170, 130, 255] },
+];
+
 // ─── Editor: Colour field definitions ────────────────────────────────────────
 const LIMA_COLOUR_FIELDS = [
   { key: 'pill_bg',      label: 'Pill Background',  desc: 'Background colour of the main pill card.',                default: '#1c1c1e' },
@@ -981,103 +1005,154 @@ class LimaLightsCard extends HTMLElement {
     const existing = document.getElementById('lima-colour-sheet');
     if (existing) existing.remove();
 
-    const PRESETS = [
-      { label: 'Warm',    rgb: [255, 180, 107] },
-      { label: 'Candle',  rgb: [255, 147, 41]  },
-      { label: 'Neutral', rgb: [255, 235, 200] },
-      { label: 'White',   rgb: [255, 255, 255] },
-      { label: 'Daylight',rgb: [220, 235, 255] },
-      { label: 'Red',     rgb: [255, 50,  50]  },
-      { label: 'Orange',  rgb: [255, 130, 0]   },
-      { label: 'Yellow',  rgb: [255, 215, 0]   },
-      { label: 'Lime',    rgb: [100, 220, 0]   },
-      { label: 'Green',   rgb: [0,   190, 80]  },
-      { label: 'Teal',    rgb: [0,   200, 180] },
-      { label: 'Cyan',    rgb: [0,   190, 255] },
-      { label: 'Blue',    rgb: [50,  100, 255] },
-      { label: 'Indigo',  rgb: [110, 50,  255] },
-      { label: 'Violet',  rgb: [180, 50,  255] },
-      { label: 'Pink',    rgb: [255, 80,  160] },
-    ];
+    // Merge config presets over defaults, preserving any extras
+    const configPresets = this._config.colour_presets;
+    const PRESETS = (Array.isArray(configPresets) && configPresets.length)
+      ? configPresets
+      : LIMA_DEFAULT_PRESETS;
 
     const currRgb = this._getRgbColor(entityId);
 
     const sheet = document.createElement('div');
     sheet.id = 'lima-colour-sheet';
-    sheet.style.cssText = `position:fixed;inset:0;z-index:11000;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);`;
+    sheet.style.cssText = `position:fixed;inset:0;z-index:11000;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:rgba(0,0,0,0.55);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);`;
+
+    // Slide-up animation
+    const animStyle = document.createElement('style');
+    animStyle.textContent = `@keyframes limaColourSheetUp { from{transform:translateY(20px);opacity:0} to{transform:none;opacity:1} } #lima-colour-inner { animation: limaColourSheetUp 0.28s cubic-bezier(0.34,1.1,0.64,1); }`;
+    sheet.appendChild(animStyle);
 
     const inner = document.createElement('div');
-    inner.style.cssText = `background:${popupBg};border:1px solid rgba(255,255,255,0.13);border-radius:22px;padding:18px;width:100%;max-width:380px;font-family:${this._haFont()};color:${textCol};`;
+    inner.id = 'lima-colour-inner';
+    inner.style.cssText = `background:${popupBg};border:1px solid rgba(255,255,255,0.13);border-radius:28px;padding:20px 20px 12px;width:100%;max-width:400px;font-family:${this._haFont()};color:${textCol};`;
 
+    // ── Title row ──────────────────────────────────────────────────────────
     const titleRow = document.createElement('div');
-    titleRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;';
-    titleRow.innerHTML = `
-      <div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.06em;">Choose Colour</div>
-      <button style="background:rgba(255,255,255,0.1);border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;color:rgba(255,255,255,0.65);font-size:14px;display:flex;align-items:center;justify-content:center;padding:0;font-family:inherit;">✕</button>`;
-    titleRow.querySelector('button').addEventListener('click', () => sheet.remove());
+    titleRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;';
+    const titleText = document.createElement('div');
+    titleText.style.cssText = 'font-size:17px;font-weight:700;letter-spacing:-0.3px;';
+    titleText.textContent = 'Choose Colour';
+    const closeBtn = document.createElement('button');
+    closeBtn.style.cssText = `background:rgba(255,255,255,0.1);border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;color:rgba(255,255,255,0.6);transition:background 0.15s;flex-shrink:0;`;
+    closeBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 12 12"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>`;
+    closeBtn.addEventListener('click', () => sheet.remove());
+    closeBtn.addEventListener('mouseenter', () => { closeBtn.style.background = 'rgba(255,255,255,0.18)'; });
+    closeBtn.addEventListener('mouseleave', () => { closeBtn.style.background = 'rgba(255,255,255,0.1)'; });
+    titleRow.appendChild(titleText);
+    titleRow.appendChild(closeBtn);
     inner.appendChild(titleRow);
 
-    // Swatches grid
+    // ── HomeKit-style colour circles grid ─────────────────────────────────
+    // 5 circles per row, large (54px), selected state has white outer ring + scale
     const grid = document.createElement('div');
-    grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;';
+    grid.style.cssText = 'display:grid;grid-template-columns:repeat(5,1fr);gap:4px 2px;margin-bottom:16px;';
 
     PRESETS.forEach(({ label, rgb }) => {
       const isActive = currRgb
-        && Math.abs(currRgb[0] - rgb[0]) < 10
-        && Math.abs(currRgb[1] - rgb[1]) < 10
-        && Math.abs(currRgb[2] - rgb[2]) < 10;
+        && Math.abs(currRgb[0] - rgb[0]) < 15
+        && Math.abs(currRgb[1] - rgb[1]) < 15
+        && Math.abs(currRgb[2] - rgb[2]) < 15;
 
-      const swatch = document.createElement('div');
-      swatch.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;';
+      const item = document.createElement('div');
+      item.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;padding:6px 4px;border-radius:14px;transition:background 0.12s;';
+
+      // Outer ring container (provides the selection ring without affecting circle size)
+      const ringWrap = document.createElement('div');
+      ringWrap.style.cssText = `width:54px;height:54px;border-radius:50%;padding:3px;box-sizing:border-box;transition:padding 0.15s,box-shadow 0.15s;${isActive ? 'box-shadow:0 0 0 2.5px rgba(255,255,255,0.9);' : ''}`;
 
       const circle = document.createElement('div');
-      circle.style.cssText = `width:44px;height:44px;border-radius:50%;background:rgb(${rgb[0]},${rgb[1]},${rgb[2]});border:2px solid ${isActive ? '#fff' : 'transparent'};transition:transform 0.12s ease,border-color 0.12s;box-shadow:0 2px 8px rgba(0,0,0,0.3);`;
+      circle.style.cssText = `width:100%;height:100%;border-radius:50%;background:rgb(${rgb[0]},${rgb[1]},${rgb[2]});box-shadow:0 3px 10px rgba(0,0,0,0.4),inset 0 1px 2px rgba(255,255,255,0.2);transition:transform 0.13s cubic-bezier(0.34,1.3,0.64,1);`;
+      if (isActive) circle.style.transform = 'scale(1.08)';
+
+      // Checkmark for active state
+      if (isActive) {
+        // Determine text colour based on luminance
+        const lum = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2];
+        const checkCol = lum > 160 ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.9)';
+        circle.innerHTML = `<svg style="width:100%;height:100%;display:block;" viewBox="0 0 48 48"><path d="M14 24l8 8 12-14" stroke="${checkCol}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+      }
 
       const lbl = document.createElement('div');
-      lbl.style.cssText = `font-size:10px;color:${isActive ? '#fff' : 'rgba(255,255,255,0.4)'};font-weight:${isActive ? '700' : '500'};text-align:center;`;
+      lbl.style.cssText = `font-size:10px;font-weight:${isActive ? '700' : '500'};color:${isActive ? '#fff' : 'rgba(255,255,255,0.4)'};text-align:center;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:58px;transition:color 0.12s;`;
       lbl.textContent = label;
 
-      swatch.appendChild(circle);
-      swatch.appendChild(lbl);
+      ringWrap.appendChild(circle);
+      item.appendChild(ringWrap);
+      item.appendChild(lbl);
 
-      swatch.addEventListener('mouseenter', () => { circle.style.transform = 'scale(1.12)'; });
-      swatch.addEventListener('mouseleave', () => { circle.style.transform = ''; });
-      swatch.addEventListener('click', ev => {
+      item.addEventListener('mouseenter', () => {
+        if (!isActive) circle.style.transform = 'scale(1.1)';
+        item.style.background = 'rgba(255,255,255,0.07)';
+      });
+      item.addEventListener('mouseleave', () => {
+        if (!isActive) circle.style.transform = '';
+        item.style.background = '';
+      });
+      item.addEventListener('click', ev => {
         ev.stopPropagation();
         this._callService('light', 'turn_on', { entity_id: entityId, rgb_color: rgb });
         if (circleEl) circleEl.style.background = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
         if (onUpdate) onUpdate();
         sheet.remove();
       });
+      // Touch feedback
+      item.addEventListener('touchstart', () => { circle.style.transform = 'scale(0.94)'; }, { passive: true });
+      item.addEventListener('touchend',   () => { circle.style.transform = isActive ? 'scale(1.08)' : ''; }, { passive: true });
 
-      grid.appendChild(swatch);
+      grid.appendChild(item);
     });
     inner.appendChild(grid);
 
-    // Custom colour picker row
+    // ── Custom colour row ─────────────────────────────────────────────────
     const customRow = document.createElement('div');
-    customRow.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid rgba(255,255,255,0.07);';
-    const customLabel = document.createElement('div');
-    customLabel.style.cssText = 'font-size:13px;color:rgba(255,255,255,0.55);font-weight:500;flex:1;';
-    customLabel.textContent = 'Custom colour';
-    const customInput = document.createElement('input');
-    customInput.type = 'color';
-    customInput.value = currRgb
+    customRow.style.cssText = `display:flex;align-items:center;gap:12px;padding:12px 8px;border-top:1px solid rgba(255,255,255,0.08);`;
+
+    // Custom circle (shows current colour or white)
+    const customCircle = document.createElement('div');
+    const initHex = currRgb
       ? '#' + currRgb.map(v => v.toString(16).padStart(2, '0')).join('')
       : '#ffffff';
-    customInput.style.cssText = 'width:36px;height:36px;border:none;border-radius:50%;cursor:pointer;padding:2px;background:none;';
+    customCircle.style.cssText = `width:40px;height:40px;border-radius:50%;flex-shrink:0;background:${initHex};box-shadow:0 2px 8px rgba(0,0,0,0.35),inset 0 1px 2px rgba(255,255,255,0.15);cursor:pointer;transition:transform 0.12s;overflow:hidden;position:relative;`;
+
+    // Rainbow / spectrum icon inside the custom circle
+    customCircle.innerHTML = `<div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);opacity:0.85;"></div><div style="position:absolute;inset:4px;border-radius:50%;background:inherit;"></div>`;
+
+    const customInput = document.createElement('input');
+    customInput.type  = 'color';
+    customInput.value = initHex;
+    customInput.style.cssText = 'position:absolute;opacity:0;width:0;height:0;pointer-events:none;';
+
+    customCircle.appendChild(customInput);
+    customCircle.addEventListener('click', ev => { ev.stopPropagation(); customInput.click(); });
+    customCircle.addEventListener('mouseenter', () => { customCircle.style.transform = 'scale(1.1)'; });
+    customCircle.addEventListener('mouseleave', () => { customCircle.style.transform = ''; });
+
     customInput.addEventListener('change', () => {
       const hex = customInput.value;
-      const r = parseInt(hex.slice(1, 3), 16);
-      const g = parseInt(hex.slice(3, 5), 16);
-      const b = parseInt(hex.slice(5, 7), 16);
+      const r   = parseInt(hex.slice(1, 3), 16);
+      const g   = parseInt(hex.slice(3, 5), 16);
+      const b   = parseInt(hex.slice(5, 7), 16);
       this._callService('light', 'turn_on', { entity_id: entityId, rgb_color: [r, g, b] });
       if (circleEl) circleEl.style.background = `rgb(${r},${g},${b})`;
       if (onUpdate) onUpdate();
       sheet.remove();
     });
-    customRow.appendChild(customLabel);
-    customRow.appendChild(customInput);
+
+    const customInfo = document.createElement('div');
+    customInfo.style.cssText = 'flex:1;min-width:0;';
+    customInfo.innerHTML = `
+      <div style="font-size:14px;font-weight:600;color:rgba(255,255,255,0.85);">Custom</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;">Open colour wheel</div>`;
+
+    const chevron = document.createElement('span');
+    chevron.style.cssText = 'font-size:18px;color:rgba(255,255,255,0.2);flex-shrink:0;';
+    chevron.textContent = '›';
+
+    customRow.appendChild(customCircle);
+    customRow.appendChild(customInfo);
+    customRow.appendChild(chevron);
+    customRow.style.cursor = 'pointer';
+    customRow.addEventListener('click', ev => { ev.stopPropagation(); customInput.click(); });
     inner.appendChild(customRow);
 
     sheet.appendChild(inner);
@@ -1379,6 +1454,17 @@ class LimaLightsCardEditor extends HTMLElement {
         .colour-hex:focus { border-color: #FFD60A; }
         .colour-edit-icon { font-size: 12px; color: var(--secondary-text-color); }
         .auto-badge { font-size: 9px; background: #34C75922; color: #34C759; border: 1px solid #34C75944; border-radius: 6px; padding: 1px 6px; font-weight: 700; }
+        .preset-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; }
+        .preset-item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 4px 8px; cursor: default; border-right: 1px solid var(--divider-color,rgba(0,0,0,0.07)); border-bottom: 1px solid var(--divider-color,rgba(0,0,0,0.07)); }
+        .preset-item:nth-child(4n) { border-right: none; }
+        .preset-item:nth-last-child(-n+4) { border-bottom: none; }
+        .preset-circle-wrap { position: relative; width: 44px; height: 44px; }
+        .preset-circle { width: 44px; height: 44px; border-radius: 50%; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.18); transition: transform 0.13s; border: 2px solid rgba(0,0,0,0.08); position: relative; overflow: hidden; }
+        .preset-circle:hover { transform: scale(1.12); }
+        .preset-circle input[type=color] { opacity: 0; position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; border: none; padding: 0; }
+        .preset-label-input { width: 100%; max-width: 68px; font-size: 10px; text-align: center; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--primary-text-color); font-family: inherit; padding: 2px 3px; outline: none; -webkit-appearance: none; transition: border-color 0.15s, background 0.15s; }
+        .preset-label-input:focus { border-color: #FFD60A; background: var(--secondary-background-color); }
+        .preset-item.dragging { opacity: 0.4; }
       </style>
 
       <!-- Card Settings -->
@@ -1429,6 +1515,21 @@ class LimaLightsCardEditor extends HTMLElement {
           <div class="colour-grid" id="colour-grid"></div>
         </div>
       </div>
+
+      <!-- Colour Presets -->
+      <div class="section">
+        <div class="section-title">Colour Presets
+          <span style="margin-left:auto;">
+            <button id="reset-presets-btn" style="font-size:10px;font-weight:600;color:var(--secondary-text-color);background:none;border:1px solid var(--divider-color,rgba(0,0,0,0.15));border-radius:8px;padding:3px 10px;cursor:pointer;font-family:inherit;">Reset to defaults</button>
+          </span>
+        </div>
+        <div style="font-size:10px;color:var(--secondary-text-color);padding:0 2px 6px;">
+          These are the colour circles shown in the colour picker. Click a circle to change its colour, edit the label, or drag to reorder.
+        </div>
+        <div class="card-block">
+          <div id="preset-grid" class="preset-grid"></div>
+        </div>
+      </div>
     `;
 
     // Wire title
@@ -1449,7 +1550,17 @@ class LimaLightsCardEditor extends HTMLElement {
 
     this._renderEntityList();
     this._buildColourGrid();
+    this._buildPresetGrid();
     this._setupReordering();
+
+    // Wire reset-presets button
+    const resetBtn = this.shadowRoot.getElementById('reset-presets-btn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        this._commitConfig('colour_presets', JSON.parse(JSON.stringify(LIMA_DEFAULT_PRESETS)));
+        this._buildPresetGrid();
+      });
+    }
   }
 
   _renderEntityList() {
@@ -1611,6 +1722,100 @@ class LimaLightsCardEditor extends HTMLElement {
       .filter(i => i.querySelector('input[type=checkbox]')?.checked)
       .map(i => i.dataset.id);
     this._commitConfig('entities', newOrder);
+  }
+
+  _buildPresetGrid() {
+    const grid = this.shadowRoot.getElementById('preset-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    const presets = this._getPresets();
+
+    const savePresets = () => {
+      this._commitConfig('colour_presets', JSON.parse(JSON.stringify(presets)));
+    };
+
+    presets.forEach((preset, idx) => {
+      const item = document.createElement('div');
+      item.className = 'preset-item';
+      item.draggable = true;
+      item.dataset.idx = idx;
+
+      // Circle with hidden colour input
+      const circleWrap = document.createElement('div');
+      circleWrap.className = 'preset-circle-wrap';
+
+      const circle = document.createElement('div');
+      circle.className = 'preset-circle';
+      circle.style.background = `rgb(${preset.rgb[0]},${preset.rgb[1]},${preset.rgb[2]})`;
+      circle.title = 'Click to change colour';
+
+      const colInput = document.createElement('input');
+      colInput.type  = 'color';
+      colInput.value = '#' + preset.rgb.map(v => v.toString(16).padStart(2,'0')).join('');
+      colInput.addEventListener('input', () => {
+        const hex = colInput.value;
+        const r = parseInt(hex.slice(1,3),16);
+        const g = parseInt(hex.slice(3,5),16);
+        const b = parseInt(hex.slice(5,7),16);
+        preset.rgb = [r, g, b];
+        circle.style.background = `rgb(${r},${g},${b})`;
+      });
+      colInput.addEventListener('change', savePresets);
+
+      circle.appendChild(colInput);
+      circleWrap.appendChild(circle);
+
+      // Label input
+      const labelInput = document.createElement('input');
+      labelInput.className  = 'preset-label-input';
+      labelInput.type       = 'text';
+      labelInput.value      = preset.label;
+      labelInput.maxLength  = 12;
+      labelInput.autocomplete = 'off';
+      labelInput.spellcheck   = false;
+      labelInput.addEventListener('input', () => { preset.label = labelInput.value; });
+      labelInput.addEventListener('blur',  savePresets);
+      labelInput.addEventListener('keydown', e => { if (e.key === 'Enter') labelInput.blur(); });
+
+      item.appendChild(circleWrap);
+      item.appendChild(labelInput);
+
+      // Drag-to-reorder
+      let dragSrc = null;
+      item.addEventListener('dragstart', e => {
+        dragSrc = item;
+        setTimeout(() => item.classList.add('dragging'), 0);
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      item.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      });
+      item.addEventListener('drop', e => {
+        e.preventDefault();
+        if (!dragSrc || dragSrc === item) return;
+        const fromIdx = parseInt(dragSrc.dataset.idx);
+        const toIdx   = parseInt(item.dataset.idx);
+        const [moved] = presets.splice(fromIdx, 1);
+        presets.splice(toIdx, 0, moved);
+        savePresets();
+        this._buildPresetGrid();
+      });
+      item.addEventListener('dragend', () => {
+        item.classList.remove('dragging');
+        dragSrc = null;
+      });
+
+      grid.appendChild(item);
+    });
+  }
+
+  _getPresets() {
+    const cfg = this._config.colour_presets;
+    return (Array.isArray(cfg) && cfg.length)
+      ? cfg.map(p => ({ label: p.label, rgb: [...p.rgb] }))
+      : LIMA_DEFAULT_PRESETS.map(p => ({ label: p.label, rgb: [...p.rgb] }));
   }
 
   _buildColourGrid() {
