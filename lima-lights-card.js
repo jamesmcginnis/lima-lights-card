@@ -1003,12 +1003,7 @@ class LimaLightsCard extends HTMLElement {
         circ.style.cssText = `width:38px;height:38px;border-radius:50%;background:rgb(${rgb[0]},${rgb[1]},${rgb[2]});box-shadow:0 3px 10px rgba(0,0,0,0.4);transition:transform 0.13s cubic-bezier(0.34,1.3,0.64,1),box-shadow 0.15s;display:flex;align-items:center;justify-content:center;position:relative;`;
         circ.innerHTML = `<svg class="lima-preset-check" style="width:60%;height:60%;opacity:0;transition:opacity 0.12s;position:absolute;" viewBox="0 0 48 48"><path d="M14 24l8 8 12-14" stroke="${checkCol}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
 
-        const lbl = document.createElement('div');
-        lbl.style.cssText = 'font-size:9px;color:rgba(255,255,255,0.4);font-weight:500;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;';
-        lbl.textContent = label;
-
         wrap.appendChild(circ);
-        wrap.appendChild(lbl);
         circleEls.push({ el: circ, rgb, isCustom: false });
 
         wrap.addEventListener('mouseenter', () => { circ.style.transform = 'scale(1.13)'; });
@@ -1038,11 +1033,7 @@ class LimaLightsCard extends HTMLElement {
       const customCirc = document.createElement('div');
       customCirc.style.cssText = `width:38px;height:38px;border-radius:50%;box-shadow:0 3px 10px rgba(0,0,0,0.4);transition:transform 0.13s cubic-bezier(0.34,1.3,0.64,1);overflow:hidden;background:#222;position:relative;`;
       customCirc.innerHTML = `<div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);opacity:0.85;"></div>`;
-      const customLbl = document.createElement('div');
-      customLbl.style.cssText = 'font-size:9px;color:rgba(255,255,255,0.4);font-weight:500;text-align:center;white-space:nowrap;';
-      customLbl.textContent = 'More';
       customWrap.appendChild(customCirc);
-      customWrap.appendChild(customLbl);
       circleEls.push({ el: customCirc, rgb: null, isCustom: true });
       customWrap.addEventListener('mouseenter', () => { customCirc.style.transform = 'scale(1.13)'; });
       customWrap.addEventListener('mouseleave', () => { customCirc.style.transform = ''; });
@@ -1160,13 +1151,8 @@ class LimaLightsCard extends HTMLElement {
         circle.innerHTML = `<svg style="width:100%;height:100%;display:block;" viewBox="0 0 48 48"><path d="M14 24l8 8 12-14" stroke="${checkCol}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
       }
 
-      const lbl = document.createElement('div');
-      lbl.style.cssText = `font-size:10px;font-weight:${isActive ? '700' : '500'};color:${isActive ? '#fff' : 'rgba(255,255,255,0.4)'};text-align:center;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:58px;transition:color 0.12s;`;
-      lbl.textContent = label;
-
       ringWrap.appendChild(circle);
       item.appendChild(ringWrap);
-      item.appendChild(lbl);
 
       item.addEventListener('mouseenter', () => {
         if (!isActive) circle.style.transform = 'scale(1.1)';
@@ -1854,20 +1840,7 @@ class LimaLightsCardEditor extends HTMLElement {
       circle.appendChild(colInput);
       circleWrap.appendChild(circle);
 
-      // Label input
-      const labelInput = document.createElement('input');
-      labelInput.className  = 'preset-label-input';
-      labelInput.type       = 'text';
-      labelInput.value      = preset.label;
-      labelInput.maxLength  = 12;
-      labelInput.autocomplete = 'off';
-      labelInput.spellcheck   = false;
-      labelInput.addEventListener('input', () => { preset.label = labelInput.value; });
-      labelInput.addEventListener('blur',  savePresets);
-      labelInput.addEventListener('keydown', e => { if (e.key === 'Enter') labelInput.blur(); });
-
       item.appendChild(circleWrap);
-      item.appendChild(labelInput);
 
       // Drag-to-reorder
       let dragSrc = null;
