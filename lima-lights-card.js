@@ -944,31 +944,119 @@ class LimaLightsCard extends HTMLElement {
 
     let rowCount = 0;
 
-    // Colour row (RGB lights only)
-    let colourCircleEl = null;
-    const updateColourCircle = () => {
-      if (!colourCircleEl) return;
-      const rgb = getRgb(); const isOn = getIsOn();
-      colourCircleEl.style.background = (rgb && isOn) ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : isOn ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.2)';
-    };
+    // Colour strip (RGB lights only) — 6 inline preset circles + custom
+    const updateColourCircle = () => { refreshInlinePresets && refreshInlinePresets(); };
+    let refreshInlinePresets = null;
 
     if (supportsRgb) {
-      const colRow = document.createElement('div');
-      colRow.className = 'lima-hk-row tappable';
-      const colLbl = document.createElement('span');
-      colLbl.className = 'lima-hk-row-label';
-      colLbl.textContent = 'Colour';
-      const colRight = document.createElement('div');
-      colRight.style.cssText = 'display:flex;align-items:center;gap:8px;';
-      colourCircleEl = document.createElement('div');
-      colourCircleEl.style.cssText = 'width:22px;height:22px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.15);flex-shrink:0;';
-      updateColourCircle();
-      const chev = document.createElement('span');
-      chev.className = 'lima-hk-chevron'; chev.textContent = '›';
-      colRight.appendChild(colourCircleEl); colRight.appendChild(chev);
-      colRow.appendChild(colLbl); colRow.appendChild(colRight);
-      colRow.addEventListener('click', ev => { ev.stopPropagation(); this._openColourPicker(entityId, accent, popupBg, textCol, colourCircleEl, updateColourCircle); });
-      listCard.appendChild(colRow);
+      const configPresets = this._config.colour_presets;
+      const allPresets    = (Array.isArray(configPresets) && configPresets.length)
+        ? configPresets : LIMA_DEFAULT_PRESETS;
+      const shownPresets  = allPresets.slice(0, 6);
+
+      const colSection = document.createElement('div');
+      colSection.style.cssText = 'padding:12px 16px 14px;';
+
+      // Label row
+      const colHeader = document.createElement('div');
+      colHeader.style.cssText = 'font-size:15px;font-weight:500;color:rgba(255,255,255,0.85);margin-bottom:12px;';
+      colHeader.textContent = 'Colour';
+      colSection.appendChild(colHeader);
+
+      // Circles row — 7 items: 6 presets + 1 custom
+      const circlesRow = document.createElement('div');
+      circlesRow.style.cssText = 'display:flex;align-items:flex-end;justify-content:space-between;gap:6px;';
+
+      const circleEls = [];
+
+      const applyRingState = () => {
+        const currRgb = getRgb();
+        const isOn    = getIsOn();
+        circleEls.forEach(({ el, rgb, isCustom }) => {
+          if (isCustom) return;
+          const active = isOn && currRgb
+            && Math.abs(currRgb[0] - rgb[0]) < 15
+            && Math.abs(currRgb[1] - rgb[1]) < 15
+            && Math.abs(currRgb[2] - rgb[2]) < 15;
+          el.style.boxShadow = active
+            ? `0 0 0 2.5px rgba(255,255,255,0.9), 0 3px 10px rgba(0,0,0,0.4)`
+            : `0 3px 10px rgba(0,0,0,0.4)`;
+          el.style.transform = active ? 'scale(1.1)' : '';
+          // checkmark
+          const lum = active ? (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) : -1;
+          const ck  = el.querySelector('.lima-preset-check');
+          if (ck) ck.style.opacity = active ? '1' : '0';
+          if (ck && active) ck.style.stroke = lum > 160 ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.9)';
+        });
+      };
+
+      refreshInlinePresets = applyRingState;
+
+      shownPresets.forEach(({ label, rgb }) => {
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;flex:1;min-width:0;';
+
+        const lum = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2];
+        const checkCol = lum > 160 ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.9)';
+
+        const circ = document.createElement('div');
+        circ.style.cssText = `width:38px;height:38px;border-radius:50%;background:rgb(${rgb[0]},${rgb[1]},${rgb[2]});box-shadow:0 3px 10px rgba(0,0,0,0.4);transition:transform 0.13s cubic-bezier(0.34,1.3,0.64,1),box-shadow 0.15s;display:flex;align-items:center;justify-content:center;position:relative;`;
+        circ.innerHTML = `<svg class="lima-preset-check" style="width:60%;height:60%;opacity:0;transition:opacity 0.12s;position:absolute;" viewBox="0 0 48 48"><path d="M14 24l8 8 12-14" stroke="${checkCol}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+
+        const lbl = document.createElement('div');
+        lbl.style.cssText = 'font-size:9px;color:rgba(255,255,255,0.4);font-weight:500;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;';
+        lbl.textContent = label;
+
+        wrap.appendChild(circ);
+        wrap.appendChild(lbl);
+        circleEls.push({ el: circ, rgb, isCustom: false });
+
+        wrap.addEventListener('mouseenter', () => { circ.style.transform = 'scale(1.13)'; });
+        wrap.addEventListener('mouseleave', applyRingState);
+        wrap.addEventListener('touchstart', () => { circ.style.transform = 'scale(0.93)'; }, { passive: true });
+        wrap.addEventListener('touchend',   applyRingState, { passive: true });
+        wrap.addEventListener('click', ev => {
+          ev.stopPropagation();
+          this._callService('light', 'turn_on', { entity_id: entityId, rgb_color: rgb });
+          // Optimistic ring update
+          circleEls.forEach(c => {
+            if (c.isCustom) return;
+            c.el.style.boxShadow = `0 3px 10px rgba(0,0,0,0.4)`;
+            c.el.style.transform = '';
+            const ck = c.el.querySelector('.lima-preset-check'); if (ck) ck.style.opacity = '0';
+          });
+          circ.style.boxShadow = `0 0 0 2.5px rgba(255,255,255,0.9), 0 3px 10px rgba(0,0,0,0.4)`;
+          circ.style.transform = 'scale(1.1)';
+          const ck = circ.querySelector('.lima-preset-check'); if (ck) { ck.style.opacity = '1'; ck.style.stroke = lum > 160 ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.9)'; }
+        });
+        circlesRow.appendChild(wrap);
+      });
+
+      // Custom circle — opens full colour picker sheet
+      const customWrap = document.createElement('div');
+      customWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;flex:1;min-width:0;';
+      const customCirc = document.createElement('div');
+      customCirc.style.cssText = `width:38px;height:38px;border-radius:50%;box-shadow:0 3px 10px rgba(0,0,0,0.4);transition:transform 0.13s cubic-bezier(0.34,1.3,0.64,1);overflow:hidden;background:#222;position:relative;`;
+      customCirc.innerHTML = `<div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);opacity:0.85;"></div>`;
+      const customLbl = document.createElement('div');
+      customLbl.style.cssText = 'font-size:9px;color:rgba(255,255,255,0.4);font-weight:500;text-align:center;white-space:nowrap;';
+      customLbl.textContent = 'More';
+      customWrap.appendChild(customCirc);
+      customWrap.appendChild(customLbl);
+      circleEls.push({ el: customCirc, rgb: null, isCustom: true });
+      customWrap.addEventListener('mouseenter', () => { customCirc.style.transform = 'scale(1.13)'; });
+      customWrap.addEventListener('mouseleave', () => { customCirc.style.transform = ''; });
+      customWrap.addEventListener('touchstart', () => { customCirc.style.transform = 'scale(0.93)'; }, { passive: true });
+      customWrap.addEventListener('touchend',   () => { customCirc.style.transform = ''; }, { passive: true });
+      customWrap.addEventListener('click', ev => {
+        ev.stopPropagation();
+        this._openColourPicker(entityId, accent, popupBg, textCol, null, () => { setTimeout(applyRingState, 300); });
+      });
+      circlesRow.appendChild(customWrap);
+
+      colSection.appendChild(circlesRow);
+      listCard.appendChild(colSection);
+      applyRingState();
       rowCount++;
     }
 
