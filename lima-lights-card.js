@@ -38,8 +38,9 @@ const LIMA_COLOUR_FIELDS = [
   { key: 'fill_color',   label: 'Pill Fill',         desc: 'Colour of the fill bar shown when lights are on.',        default: '#FFD60A' },
   { key: 'on_color',     label: 'Light On',          desc: 'Colour used to indicate a light is on.',                 default: '#FFD60A' },
   { key: 'off_color',    label: 'Light Off',         desc: 'Colour used to indicate a light is off.',                default: '#48484A' },
-  { key: 'popup_bg',     label: 'Popup Background',  desc: 'Background colour of all popup dialogs.',                default: '#1c1c1e' },
-  { key: 'icon_color',   label: 'Bulb Icon',         desc: 'Colour of the bulb icon on the pill card.',              default: '#FFD60A' },
+  { key: 'popup_bg',        label: 'Popup Background',  desc: 'Background colour of all popup dialogs.',                default: '#1c1c1e' },
+  { key: 'icon_color',      label: 'Bulb Icon',         desc: 'Colour of the bulb icon on the pill card.',              default: '#FFD60A' },
+  { key: 'power_btn_color', label: 'Power Button',      desc: 'Colour of the power circle button in the light popup.',  default: '#FFD60A' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -71,6 +72,7 @@ class LimaLightsCard extends HTMLElement {
       text_color:     '#ffffff',
       popup_bg:       '#1c1c1e',
       icon_color:     '#FFD60A',
+      power_btn_color:'#FFD60A',
     };
   }
 
@@ -86,6 +88,7 @@ class LimaLightsCard extends HTMLElement {
       text_color:     '#ffffff',
       popup_bg:       '#1c1c1e',
       icon_color:     '#FFD60A',
+      power_btn_color:'#FFD60A',
       ...config
     };
     if (this.shadowRoot.innerHTML) this._render();
@@ -870,8 +873,8 @@ class LimaLightsCard extends HTMLElement {
     // ── Toggle button (HomeKit round power icon) ───────────────────────────
     const toggleBtn = document.createElement('button');
     const applyToggleStyle = (on) => {
-      const col = on ? getSliderColor() : 'rgba(255,255,255,0.12)';
-      const iconCol = on ? '#000' : 'rgba(255,255,255,0.5)';
+      const col     = on ? (cfg.power_btn_color || getSliderColor()) : 'rgba(255,255,255,0.12)';
+      const iconCol = on ? (() => { const lum = cfg.power_btn_color ? parseInt(cfg.power_btn_color.slice(1,3),16)*0.299+parseInt(cfg.power_btn_color.slice(3,5),16)*0.587+parseInt(cfg.power_btn_color.slice(5,7),16)*0.114 : 0; return lum > 160 ? '#000' : '#fff'; })() : 'rgba(255,255,255,0.5)';
       toggleBtn.style.cssText = `width:64px;height:64px;border-radius:50%;background:${col};border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.25s,transform 0.1s;flex-shrink:0;box-shadow:${on ? `0 4px 20px ${col}66` : 'none'};`;
       toggleBtn.innerHTML = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="${iconCol}" stroke-width="2" stroke-linecap="round"><path d="M12 3v4M6.3 6.3A8 8 0 1 0 17.7 6.3"/></svg>`;
     };
